@@ -18,7 +18,7 @@ class Map3D {
         this.draggingMarker = null; // 正在拖動的地標
         this.dragStartY = undefined; // 拖動開始時的 Y 位置
         // 縮放速度係數（數字越大縮放越快）
-        this.zoomSpeed = 0.4;
+        this.zoomSpeed = 0.3; // 調整為更舒適的縮放速度
         // 線框模式狀態（方便在多網格模型時統一切換）
         this.isWireframe = false;
         // 鏡頭平移動畫狀態（用來做類似 Google Map 的平滑移動）
@@ -40,12 +40,17 @@ class Map3D {
         const height = this.container.clientHeight;
         this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
         this.camera.position.set(0, 50, 100);
-        this.camera.lookAt(0, 0, 0);
+        // 設定相機的預設旋轉角度（向下看，不看向特定點）
+        this.camera.rotation.order = 'YXZ';
+        this.camera.rotation.y = 0; // 水平角度
+        this.camera.rotation.x = -0.5; // 向下傾斜約 30 度
 
         // 創建渲染器
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(width, height);
         this.renderer.shadowMap.enabled = true;
+        // 設定線條渲染（讓邊框更細）
+        this.renderer.setPixelRatio(window.devicePixelRatio);
         this.container.appendChild(this.renderer.domElement);
 
         // 添加光源
@@ -237,13 +242,14 @@ class Map3D {
                 return;
             }
             
-            // 創建邊緣線材質（黑色邊框）
+            // 創建邊緣線材質（黑色邊框，細線）
             const edgeMaterial = new THREE.LineBasicMaterial({
                 color: 0x000000, // 黑色邊框
+                linewidth: 1,    // 線條寬度（WebGL 限制，大多數瀏覽器只支援 1）
                 depthTest: true,
                 depthWrite: true,
-                transparent: false,
-                opacity: 1.0
+                transparent: true,  // 使用透明以獲得更細的視覺效果
+                opacity: 0.8        // 稍微降低不透明度，讓邊框看起來更細
             });
             
             // 創建邊緣線物件
@@ -288,14 +294,17 @@ class Map3D {
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
         const maxSize = Math.max(size.x, size.y, size.z);
-        const distance = maxSize * 2;
+        const distance = maxSize * 0.6; // 調遠視角（改為 0.6 倍）
         
         this.camera.position.set(
             center.x,
-            center.y + distance * 0.5,
+            center.y + maxSize * 0.1, // 保持高度不變
             center.z + distance
         );
-        this.camera.lookAt(center);
+        // 不強制看向中心，設定相機的固定角度
+        this.camera.rotation.order = 'YXZ';
+        this.camera.rotation.y = 0; // 水平角度
+        this.camera.rotation.x = -0.5; // 向下傾斜約 30 度
     }
     
     // 控制模型的顯示/隱藏（用於街景模式）
@@ -644,23 +653,32 @@ class Map3D {
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
             const maxSize = Math.max(size.x, size.y, size.z);
-            const distance = maxSize * 2;
+            const distance = maxSize * 0.6; // 調遠視角（改為 0.6 倍）
             
-            this.camera.position.set(center.x, center.y + distance * 0.5, center.z + distance);
-            this.camera.lookAt(center);
+            this.camera.position.set(center.x, center.y + maxSize * 0.1, center.z + distance);
+            // 不強制看向中心，設定相機的固定角度
+            this.camera.rotation.order = 'YXZ';
+            this.camera.rotation.y = 0; // 水平角度
+            this.camera.rotation.x = -0.5; // 向下傾斜約 30 度
         } else if (this.mapModel) {
             // 向後兼容單模型系統
             const box = new THREE.Box3().setFromObject(this.mapModel);
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
             const maxSize = Math.max(size.x, size.y, size.z);
-            const distance = maxSize * 2;
+            const distance = maxSize * 0.6; // 調遠視角（改為 0.6 倍）
             
-            this.camera.position.set(center.x, center.y + distance * 0.5, center.z + distance);
-            this.camera.lookAt(center);
+            this.camera.position.set(center.x, center.y + maxSize * 0.1, center.z + distance);
+            // 不強制看向中心，設定相機的固定角度
+            this.camera.rotation.order = 'YXZ';
+            this.camera.rotation.y = 0; // 水平角度
+            this.camera.rotation.x = -0.5; // 向下傾斜約 30 度
         } else {
             this.camera.position.set(0, 50, 100);
-            this.camera.lookAt(0, 0, 0);
+            // 設定相機的預設旋轉角度
+            this.camera.rotation.order = 'YXZ';
+            this.camera.rotation.y = 0;
+            this.camera.rotation.x = -0.5; // 向下傾斜
         }
     }
 
@@ -731,7 +749,8 @@ class Map3D {
     // 設置事件監聽
     setupEventListeners() {
         // 滑鼠控制
-        let isDragging = false;
+        let isRotating = false; // 右鍵旋轉
+        let isPanning = false;  // 左鍵平移
         let previousMousePosition = { x: 0, y: 0 };
         let rotationCenter = new THREE.Vector3(0, 0, 0); // 旋轉中心點
         let cameraDistance = 0; // 相機距離中心的距離
@@ -744,8 +763,33 @@ class Map3D {
                 return;
             }
             
-            // 編輯模式下，檢查是否點擊了地標
-            if (this.isEditMode) {
+            // 右鍵：旋轉鏡頭（優先處理，不受編輯模式影響）
+            if (e.button === 2 && !this.draggingMarker && !this.isSelectingPosition) {
+                isRotating = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+                
+                // 記錄旋轉中心點和相機距離
+                if (this.mapModels && Object.keys(this.mapModels).length > 0) {
+                    const box = new THREE.Box3();
+                    Object.values(this.mapModels).forEach(model => {
+                        if (model) box.expandByObject(model);
+                    });
+                    rotationCenter = box.getCenter(new THREE.Vector3());
+                } else if (this.mapModel) {
+                    rotationCenter = new THREE.Box3().setFromObject(this.mapModel).getCenter(new THREE.Vector3());
+                } else {
+                    rotationCenter = new THREE.Vector3(0, 0, 0);
+                }
+                
+                // 計算相機到中心的距離
+                const cameraToCenter = new THREE.Vector3().subVectors(this.camera.position, rotationCenter);
+                cameraDistance = cameraToCenter.length();
+                
+                e.preventDefault();
+            }
+            
+            // 編輯模式下，檢查是否點擊了地標（只對左鍵有效）
+            if (this.isEditMode && e.button === 0) {
                 const rect = this.renderer.domElement.getBoundingClientRect();
                 this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
                 this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -768,29 +812,12 @@ class Map3D {
                 }
             }
             
-            // 正常的地圖拖動（編輯模式下如果沒點到地標，也可以拖動地圖）
-            if (!this.draggingMarker && !this.isSelectingPosition) {
-                isDragging = true;
+            // 左鍵：平移鏡頭（編輯模式下如果沒點到地標，也可以平移）
+            if (e.button === 0 && !this.draggingMarker && !this.isSelectingPosition) {
+                isPanning = true;
                 previousMousePosition = { x: e.clientX, y: e.clientY };
+                e.preventDefault();
             }
-            
-            // 記錄旋轉中心點和相機距離（在開始拖曳時固定，避免旋轉時拉遠）
-            // 計算旋轉中心
-            if (this.mapModels && Object.keys(this.mapModels).length > 0) {
-                const box = new THREE.Box3();
-                Object.values(this.mapModels).forEach(model => {
-                    if (model) box.expandByObject(model);
-                });
-                rotationCenter = box.getCenter(new THREE.Vector3());
-            } else if (this.mapModel) {
-                rotationCenter = new THREE.Box3().setFromObject(this.mapModel).getCenter(new THREE.Vector3());
-            } else {
-                rotationCenter = new THREE.Vector3(0, 0, 0);
-            }
-            
-            // 計算相機到中心的距離
-            const cameraToCenter = new THREE.Vector3().subVectors(this.camera.position, rotationCenter);
-            cameraDistance = cameraToCenter.length();
         });
 
         this.renderer.domElement.addEventListener('mousemove', (e) => {
@@ -841,32 +868,68 @@ class Map3D {
                 return;
             }
             
-            // 正常的地圖拖動
-            if (isDragging && !this.isSelectingPosition) {
-                // 將拖曳方向反轉（整體操作顛倒）
+            // 右鍵拖動：旋轉鏡頭（不固定看向中心點）
+            if (isRotating && !this.isSelectingPosition) {
                 const deltaX = previousMousePosition.x - e.clientX;
                 const deltaY = previousMousePosition.y - e.clientY;
 
-                // 計算相機相對於中心的方向
-                const cameraToCenter = new THREE.Vector3().subVectors(this.camera.position, rotationCenter);
-                const spherical = new THREE.Spherical();
-                spherical.setFromVector3(cameraToCenter);
+                // 直接旋轉相機的角度，而不是圍繞中心點旋轉
+                this.camera.rotation.order = 'YXZ';
                 
-                // 更新角度
-                spherical.theta += deltaX * 0.01;
-                spherical.phi -= deltaY * 0.01;
-                spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+                // 水平旋轉（繞 Y 軸）- 調整為更舒適的旋轉速度
+                this.camera.rotation.y -= deltaX * 0.006;
                 
-                // 保持距離不變（避免拉遠）
-                spherical.radius = cameraDistance;
-
-                // 根據新的角度計算相機位置
-                const newCameraOffset = new THREE.Vector3();
-                newCameraOffset.setFromSpherical(spherical);
-                this.camera.position.copy(rotationCenter).add(newCameraOffset);
-                this.camera.lookAt(rotationCenter);
+                // 垂直旋轉（繞 X 軸）- 調整為更舒適的旋轉速度
+                this.camera.rotation.x -= deltaY * 0.006;
+                
+                // 限制垂直角度，避免翻轉
+                this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
 
                 previousMousePosition = { x: e.clientX, y: e.clientY };
+                e.preventDefault();
+            }
+            
+            // 左鍵拖動：平移鏡頭（與滑鼠游標移動速度一致）
+            if (isPanning && !this.isSelectingPosition) {
+                const deltaX = e.clientX - previousMousePosition.x;
+                const deltaY = e.clientY - previousMousePosition.y;
+                
+                // 更新相機矩陣以獲取正確的方向
+                this.camera.updateMatrixWorld();
+                
+                // 計算相機的右方向和上方向
+                const right = new THREE.Vector3();
+                right.setFromMatrixColumn(this.camera.matrixWorld, 0);
+                right.normalize();
+                
+                const up = new THREE.Vector3();
+                up.setFromMatrixColumn(this.camera.matrixWorld, 1);
+                up.normalize();
+                
+                // 參考 Three.js OrbitControls 和 Blender 等標準3D工具的計算方式
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                const height = rect.height;
+                
+                // 計算相機到焦點的距離（使用相機位置到原點的距離）
+                const distance = this.camera.position.length();
+                
+                // 計算可見高度（標準透視投影計算）
+                const fov = this.camera.fov * (Math.PI / 180);
+                const visibleHeight = 2 * Math.tan(fov / 2) * distance;
+                
+                // 計算平移速度：讓滑鼠移動與視口移動一致（參考 OrbitControls 的標準計算）
+                // 使用 1:1 的比例，滑鼠移動多少像素，視口就移動多少像素
+                const panSpeed = visibleHeight / height;
+                
+                const panX = right.clone().multiplyScalar(-deltaX * panSpeed);
+                const panY = up.clone().multiplyScalar(deltaY * panSpeed);
+                
+                // 平移相機
+                this.camera.position.add(panX);
+                this.camera.position.add(panY);
+
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+                e.preventDefault();
             }
         });
 
@@ -895,7 +958,13 @@ class Map3D {
                 this.dragStartY = undefined;
             }
             
-            isDragging = false;
+            isRotating = false;
+            isPanning = false;
+        });
+        
+        // 防止右鍵選單
+        this.renderer.domElement.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
         });
 
         this.renderer.domElement.addEventListener('click', (e) => {
