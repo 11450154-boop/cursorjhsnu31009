@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>師大附中 3D 校園地圖</title>
+    
+    <!-- 自訂樣式 -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>師大附中 3D 校園地圖</h1>
+            <div class="header-tools">
+                <!-- 模仿 Google Maps 的搜尋框 -->
+                <div class="search-container">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        class="search-input" 
+                        placeholder="搜尋地標（例如：教學大樓）"
+                        autocomplete="off"
+                    >
+                    <div id="searchResults" class="search-results"></div>
+                </div>
+                <div class="controls">
+                    <button id="addMarkerBtn" class="btn">添加地標</button>
+                    <button id="editModeBtn" class="btn">編輯模式</button>
+                    <button id="streetViewBtn" class="btn">街景模式</button>
+                    <button id="resetViewBtn" class="btn">重置視角</button>
+                    <button id="toggleWireframeBtn" class="btn">線框模式</button>
+                    <button id="exportMarkersBtn" class="btn">匯出地標</button>
+                    <button id="importMarkersBtn" class="btn">匯入地標</button>
+                    <input type="file" id="importFileInput" accept=".json" style="display: none;">
+                </div>
+            </div>
+        </header>
+        
+        <div class="main-content">
+            <!-- 3D 地圖容器 -->
+            <div id="canvas-container">
+                <!-- 模仿 Google Map 的右下角控制按鈕 -->
+                <div class="map-controls-floating">
+                    <button id="zoomInBtn" class="map-ctrl-btn">＋</button>
+                    <button id="zoomOutBtn" class="map-ctrl-btn">－</button>
+                    <button id="northResetBtn" class="map-ctrl-btn compass-btn">N</button>
+                </div>
+            </div>
+            
+            <!-- 資訊面板 -->
+            <div id="infoPanel" class="info-panel hidden">
+                <button class="close-btn" id="closeInfoBtn">×</button>
+                <div id="infoContent">
+                    <h2 id="infoTitle">地標名稱</h2>
+                    <div id="infoImageContainer">
+                        <img id="infoImage" src="" alt="地標照片">
+                    </div>
+                    <div id="infoDescription">
+                        <p>地標簡介...</p>
+                    </div>
+                    <div class="info-actions">
+                        <button id="editInfoBtn" class="btn-action">編輯</button>
+                        <button id="deleteInfoBtn" class="btn-action btn-danger">刪除</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 標記列表側邊欄 -->
+            <div id="markerListPanel" class="marker-list-panel">
+                <h3>地標列表</h3>
+                <div id="markerListItems"></div>
+            </div>
+        </div>
+        
+        <!-- 標記編輯器模態框 -->
+        <div id="markerEditorModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalTitle">添加地標</h2>
+                    <button class="close-btn" id="closeModalBtn">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="markerName">地標名稱：</label>
+                        <input type="text" id="markerName" placeholder="例如：教學大樓">
+                    </div>
+                    <div class="form-group">
+                        <label for="markerDescription">簡介：</label>
+                        <textarea id="markerDescription" rows="4" placeholder="輸入地標簡介..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="markerImage">照片：</label>
+                        <input type="file" id="markerImage" accept="image/*">
+                        <div id="imagePreview" class="image-preview"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>位置座標：</label>
+                        <div class="coord-inputs">
+                            <input type="number" id="markerX" placeholder="X" step="0.1">
+                            <input type="number" id="markerY" placeholder="Y" step="0.1">
+                            <input type="number" id="markerZ" placeholder="Z" step="0.1">
+                        </div>
+                        <small>點擊「在地圖上選擇位置」後，點擊 3D 地圖來設定位置</small>
+                    </div>
+                    <div class="form-actions">
+                        <button id="selectPositionBtn" class="btn-secondary">在地圖上選擇位置</button>
+                        <button id="saveMarkerBtn" class="btn-primary">儲存</button>
+                        <button id="cancelMarkerBtn" class="btn-secondary">取消</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Three.js 庫 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // 載入模型載入器（OBJ/MTL 優先，STL 作為備用）
+        (function() {
+            // 載入 MTLLoader（OBJ 材質需要）
+            const mtlScript = document.createElement('script');
+            mtlScript.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/MTLLoader.js';
+            mtlScript.onload = function() {
+                console.log('MTLLoader 載入完成');
+            };
+            document.head.appendChild(mtlScript);
+
+            // 載入 OBJLoader
+            const objScript = document.createElement('script');
+            objScript.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js';
+            objScript.onload = function() {
+                console.log('OBJLoader 載入完成');
+            };
+            document.head.appendChild(objScript);
+
+            // 載入 STLLoader（作為備用）
+            const stlScript = document.createElement('script');
+            stlScript.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js';
+            stlScript.onload = function() {
+                console.log('STLLoader 載入完成（備用）');
+            };
+            document.head.appendChild(stlScript);
+        })();
+    </script>
+    
+    <!-- 自訂腳本 -->
+    <script src="data.js"></script>
+    <script src="model-loader.js"></script>
+    <script src="map3d.js"></script>
+    <script src="marker-editor.js"></script>
+    <script src="street-view.js"></script>
+    <script src="map-ui.js"></script>
+    <script src="map-search.js"></script>
+</body>
+</html>
+
