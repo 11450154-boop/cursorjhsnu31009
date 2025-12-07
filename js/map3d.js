@@ -96,9 +96,9 @@ class Map3D {
     // 載入所有模型檔案
     loadAllModels() {
         const modelsToLoad = [
-            { path: 'building.obj', type: 'building', name: '建築物' },
-            { path: 'ground.obj', type: 'ground', name: '地板' },
-            { path: 'building name.obj', type: 'buildingName', name: '建築名稱' }
+            { path: 'models/building.obj', type: 'building', name: '建築物' },
+            { path: 'models/ground.obj', type: 'ground', name: '地板' },
+            { path: 'models/building name.obj', type: 'buildingName', name: '建築名稱' }
         ];
         
         let loadedCount = 0;
@@ -352,9 +352,9 @@ class Map3D {
     // 處理模型載入錯誤，嘗試下一個檔案
     handleModelLoadError(failedPath, currentIndex) {
         const defaultModels = [
-            'building.obj',
-            'building name.obj',
-            'ground.obj'
+            'models/building.obj',
+            'models/building name.obj',
+            'models/ground.obj'
         ];
         
         const nextIndex = currentIndex + 1;
@@ -384,9 +384,9 @@ class Map3D {
         
         // 預設嘗試載入的檔案（按優先順序）
         const defaultModels = [
-            'building.obj',      // 主要建築模型
-            'building name.obj', // 建築名稱模型
-            'ground.obj'         // 地面模型
+            'models/building.obj',      // 主要建築模型
+            'models/building name.obj', // 建築名稱模型
+            'models/ground.obj'         // 地面模型
         ];
         
         // 根據回退索引返回對應的模型

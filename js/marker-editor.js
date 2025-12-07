@@ -19,22 +19,10 @@ class MarkerEditor {
             this.openEditor();
         });
 
-        // 編輯模式按鈕
-        document.getElementById('editModeBtn').addEventListener('click', () => {
-            this.toggleEditMode();
-        });
-
         // 重置視角按鈕
         document.getElementById('resetViewBtn').addEventListener('click', () => {
             if (map3D) {
                 map3D.resetView();
-            }
-        });
-
-        // 線框模式按鈕
-        document.getElementById('toggleWireframeBtn').addEventListener('click', () => {
-            if (map3D) {
-                map3D.toggleWireframe();
             }
         });
 
@@ -300,27 +288,6 @@ class MarkerEditor {
         }
     }
 
-    // 切換編輯模式
-    toggleEditMode() {
-        this.isEditMode = !this.isEditMode;
-        const btn = document.getElementById('editModeBtn');
-        
-        if (this.isEditMode) {
-            btn.classList.add('active');
-            btn.textContent = '退出編輯';
-            // 啟用地圖的編輯模式
-            if (map3D && map3D.setEditMode) {
-                map3D.setEditMode(true);
-            }
-        } else {
-            btn.classList.remove('active');
-            btn.textContent = '編輯模式';
-            // 關閉地圖的編輯模式
-            if (map3D && map3D.setEditMode) {
-                map3D.setEditMode(false);
-            }
-        }
-    }
 
     // 更新標記列表
     updateMarkerList() {
