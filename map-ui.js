@@ -55,6 +55,16 @@ function setupMapUI() {
     } else {
         console.warn('找不到 resetViewBtn');
     }
+
+    // 圖片資訊面板關閉按鈕
+    const closePhotoInfoBtn = document.getElementById('closePhotoInfoBtn');
+    if (closePhotoInfoBtn) {
+        closePhotoInfoBtn.onclick = () => {
+            if (window.map3D && window.map3D.hidePhotoInfoPanel) {
+                window.map3D.hidePhotoInfoPanel();
+            }
+        };
+    }
     
     mapUISetup = true;
     console.log('地圖 UI 控制按鈕設置完成');
