@@ -16,12 +16,25 @@
 ```
 map/
 ├── index.html          # 主頁面
-├── styles.css          # 樣式檔案
-├── data.js            # 資料管理系統
-├── map3d.js           # 3D 地圖核心功能
-├── marker-editor.js   # 標記編輯器
-├── 附中地圖.stl       # 3D 地圖模型檔案
-└── README.md          # 說明文件
+├── css/
+│   └── styles.css      # 樣式檔案
+├── js/
+│   ├── data.js         # 資料管理系統
+│   ├── map3d.js        # 3D 地圖核心功能
+│   ├── model-loader.js # 模型載入器
+│   ├── marker-editor.js # 標記編輯器
+│   ├── map-search.js   # 地圖搜尋功能
+│   └── street-view.js  # 街景模式
+├── models/
+│   ├── building.obj    # 建築物模型
+│   ├── building.mtl    # 建築物材質
+│   ├── building name.obj # 建築名稱模型
+│   ├── building name.mtl # 建築名稱材質
+│   ├── ground.obj      # 地面模型
+│   └── ground.mtl      # 地面材質
+├── images/             # 地標圖片
+├── docs/               # 文件資料夾
+└── README.md           # 說明文件
 ```
 
 ## 使用方式
@@ -70,7 +83,7 @@ map/
 
 ### 注意事項
 
-1. **STL 檔案**：確保 `附中地圖.stl` 檔案與 `index.html` 在同一目錄
+1. **模型檔案**：確保模型檔案（.obj 和 .mtl）位於 `models/` 目錄中
 2. **圖片格式**：支援 JPG、PNG、GIF、WebP，檔案大小建議小於 5MB
 3. **資料儲存**：所有資料儲存在瀏覽器本地，清除瀏覽器資料會遺失所有地標
 
@@ -78,7 +91,7 @@ map/
 
 ### 調整地圖大小
 
-在 `map3d.js` 的 `loadSTLModel()` 函數中，可以調整以下參數：
+在 `js/map3d.js` 的模型載入函數中，可以調整以下參數：
 
 ```javascript
 const scale = 50 / maxDim; // 調整這個值來控制地圖大小
@@ -86,7 +99,7 @@ const scale = 50 / maxDim; // 調整這個值來控制地圖大小
 
 ### 調整標記顏色
 
-在 `map3d.js` 的 `addMarker()` 函數中，可以修改標記顏色：
+在 `js/map3d.js` 的 `addMarker()` 函數中，可以修改標記顏色：
 
 ```javascript
 const markerMaterial = new THREE.MeshPhongMaterial({
@@ -120,9 +133,9 @@ const markerMaterial = new THREE.MeshPhongMaterial({
 
 可以透過修改以下檔案來擴展功能：
 
-- `data.js`：添加資料匯入/匯出功能
-- `map3d.js`：添加更多 3D 互動效果
-- `marker-editor.js`：添加更多編輯選項
+- `js/data.js`：添加資料匯入/匯出功能
+- `js/map3d.js`：添加更多 3D 互動效果
+- `js/marker-editor.js`：添加更多編輯選項
 
 ## 授權
 

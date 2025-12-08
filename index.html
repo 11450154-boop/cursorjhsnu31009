@@ -14,6 +14,7 @@
             <h1>師大附中 3D 校園地圖</h1>
             <div class="header-tools">
                 <div class="controls">
+                    <button id="setupMarkerPosBtn" class="btn">設定標誌位置</button>
                     <button id="streetViewBtn" class="btn">街景模式</button>
                     <button id="resetViewBtn" class="btn">重置視角</button>
                 </div>
@@ -29,6 +30,60 @@
                     <button id="zoomOutBtn" class="map-ctrl-btn">－</button>
                 </div>
             </div>
+            
+            <!-- 圖片資訊面板 -->
+            <div id="photoInfoPanel" class="photo-info-panel hidden">
+                <button class="close-btn" id="closePhotoInfoBtn">×</button>
+                <div id="photoInfoContent">
+                    <h2 id="photoInfoTitle">圖片名稱</h2>
+                    <div id="photoInfoImageContainer">
+                        <img id="photoInfoImage" src="" alt="圖片">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 標誌位置設定模態框 -->
+        <div id="markerPositionEditorModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>設定標誌位置</h2>
+                    <button class="close-btn" id="closeMarkerEditorBtn">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>當前標誌：</label>
+                        <div id="currentMarkerName" style="font-size: 18px; font-weight: 600; color: #667eea; margin: 10px 0;">
+                            請選擇標誌
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>標誌列表：</label>
+                        <div id="markerListContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px; margin-top: 10px;">
+                            <!-- 標誌列表將在這裡動態生成 -->
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>座標位置：</label>
+                        <div class="coord-inputs" style="display: flex; gap: 10px; margin-top: 10px;">
+                            <input type="number" id="markerXInput" placeholder="X" step="0.1" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                            <input type="number" id="markerYInput" placeholder="Y" step="0.1" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                            <input type="number" id="markerZInput" placeholder="Z" step="0.1" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions" style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button id="selectMarkerPositionBtn" class="btn-primary" style="flex: 1;">在地圖上選擇位置</button>
+                        <button id="saveManualPositionBtn" class="btn-secondary" style="flex: 1;">儲存手動輸入</button>
+                        <button id="cancelMarkerEditorBtn" class="btn-secondary" style="flex: 1;">取消</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
             
         </div>
         
@@ -66,6 +121,8 @@
     </script>
     
     <!-- 自訂腳本 -->
+    <script src="js/photo-marker.js"></script>
+    <script src="js/photo-marker-editor.js"></script>
     <script src="model-loader.js"></script>
     <script src="map3d.js"></script>
     <script src="street-view.js"></script>

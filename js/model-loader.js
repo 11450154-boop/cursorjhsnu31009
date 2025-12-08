@@ -119,12 +119,8 @@ class ModelLoader {
         }
 
         // 嘗試載入 MTL 材質檔
-        // 對於 tinker.obj，使用 obj.mtl
         // 對於其他 OBJ 檔案，嘗試使用同名的 MTL
-        let mtlPath = 'obj.mtl'; // 預設使用 obj.mtl
-        if (filePath !== 'tinker.obj') {
-            mtlPath = filePath.replace('.obj', '.mtl');
-        }
+        let mtlPath = filePath.replace('.obj', '.mtl');
         const objLoader = new THREE.OBJLoader();
         
         // 如果有 MTLLoader，先載入材質
@@ -170,7 +166,7 @@ class ModelLoader {
                 console.error('載入 OBJ 模型失敗:', error);
                 // 如果有 map3D 實例且是預設檔案，嘗試回退
                 if (this.map3D && this.map3D.handleModelLoadError) {
-                    const defaultModels = ['building.obj', 'building name.obj', 'ground.obj'];
+                    const defaultModels = ['models/building.obj', 'models/building name.obj', 'models/ground.obj'];
                     const currentIndex = defaultModels.indexOf(filePath);
                     if (currentIndex >= 0 && this.currentFallbackIndex !== undefined) {
                         // 使用儲存的回退索引
