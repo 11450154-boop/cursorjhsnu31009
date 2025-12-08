@@ -8,26 +8,18 @@ class Map3D {
         this.controls = null;
         this.mapModel = null;
         this.mapModels = {}; // 儲存多個模型：{ building: obj, ground: obj, buildingName: obj }
-        this.markers = [];
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
-        this.isSelectingPosition = false;
-        this.selectPositionCallback = null;
-        this.currentMarkerId = null;
-        this.isEditMode = false; // 編輯模式狀態
-        this.draggingMarker = null; // 正在拖動的地標
-        this.dragStartY = undefined; // 拖動開始時的 Y 位置
         // 縮放速度係數（數字越大縮放越快）
         this.zoomSpeed = 0.3; // 調整為更舒適的縮放速度
-        // 線框模式狀態（方便在多網格模型時統一切換）
-        this.isWireframe = false;
         // 鏡頭平移動畫狀態（用來做類似 Google Map 的平滑移動）
         this.cameraAnimation = null;
+        // 街景模式狀態（用於禁用滑鼠控制）
+        this.isStreetViewMode = false;
         
         this.init();
         this.setupEventListeners();
         this.loadModel();
-        this.loadMarkers();
     }
 
     init() {
@@ -316,6 +308,7 @@ class Map3D {
     
     // 設定街景模式的模型顯示狀態
     setStreetViewMode(isStreetView) {
+        this.isStreetViewMode = isStreetView;
         if (isStreetView) {
             // 街景模式：只顯示建築物和地板
             this.setModelVisibility('building', true);
@@ -327,26 +320,6 @@ class Map3D {
             this.setModelVisibility('ground', true);
             this.setModelVisibility('buildingName', true);
         }
-    }
-    
-    // 設定編輯模式
-    setEditMode(enabled) {
-        this.isEditMode = enabled;
-        
-        // 在編輯模式下，可以視覺化提示（例如改變地標顏色或大小）
-        this.markers.forEach(marker => {
-            if (marker.mesh) {
-                if (enabled) {
-                    // 編輯模式：稍微放大並改變顏色
-                    marker.mesh.scale.set(1.2, 1.2, 1.2);
-                    marker.mesh.material.emissive.setHex(0xffff00); // 黃色發光
-                } else {
-                    // 正常模式：恢復原狀
-                    marker.mesh.scale.set(1, 1, 1);
-                    marker.mesh.material.emissive.setHex(0xff6b6b); // 恢復紅色
-                }
-            }
-        });
     }
     
     // 處理模型載入錯誤，嘗試下一個檔案
@@ -421,227 +394,6 @@ class Map3D {
         console.log('地圖模型載入完成');
     }
 
-    // 添加標記
-    addMarker(markerData) {
-        const { id, name, description, position, imageData } = markerData;
-        
-        // 創建標記點（使用球體）
-        const markerGeometry = new THREE.SphereGeometry(0.8, 16, 16);
-        const markerMaterial = new THREE.MeshPhongMaterial({
-            color: 0xff6b6b,
-            emissive: 0xff6b6b,
-            emissiveIntensity: 0.3
-        });
-        const markerMesh = new THREE.Mesh(markerGeometry, markerMaterial);
-        markerMesh.position.set(position.x, position.y, position.z);
-        markerMesh.userData = { type: 'marker', id, name, description, imageData };
-        markerMesh.castShadow = true;
-
-        // 添加標記標籤（使用 CSS2DRenderer 或簡單的 sprite）
-        const sprite = this.createMarkerSprite(name);
-        sprite.position.copy(markerMesh.position);
-        sprite.position.y += 5;
-        sprite.userData = { type: 'marker-label', markerId: id };
-
-        this.scene.add(markerMesh);
-        this.scene.add(sprite);
-
-        const marker = {
-            id,
-            mesh: markerMesh,
-            sprite: sprite,
-            data: markerData
-        };
-
-        this.markers.push(marker);
-        return marker;
-    }
-
-    // 創建標記精靈（簡單的文字標籤）
-    createMarkerSprite(text) {
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.width = 256;
-        canvas.height = 64;
-        
-        context.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        context.fillStyle = 'white';
-        context.font = '24px Microsoft JhengHei';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText(text, canvas.width / 2, canvas.height / 2);
-
-        const texture = new THREE.CanvasTexture(canvas);
-        const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
-        const sprite = new THREE.Sprite(spriteMaterial);
-        sprite.scale.set(12, 3, 1);
-        
-        return sprite;
-    }
-
-    // 移除標記
-    removeMarker(id) {
-        const index = this.markers.findIndex(m => m.id === id);
-        if (index !== -1) {
-            const marker = this.markers[index];
-            this.scene.remove(marker.mesh);
-            this.scene.remove(marker.sprite);
-            this.markers.splice(index, 1);
-        }
-    }
-
-    // 更新標記
-    updateMarker(id, updates) {
-        const marker = this.markers.find(m => m.id === id);
-        if (marker) {
-            if (updates.position) {
-                marker.mesh.position.set(
-                    updates.position.x,
-                    updates.position.y,
-                    updates.position.z
-                );
-                marker.sprite.position.copy(marker.mesh.position);
-                marker.sprite.position.y += 5;
-            }
-            if (updates.name) {
-                // 更新標籤
-                this.scene.remove(marker.sprite);
-                marker.sprite = this.createMarkerSprite(updates.name);
-                marker.sprite.position.copy(marker.mesh.position);
-                marker.sprite.position.y += 5;
-                this.scene.add(marker.sprite);
-            }
-            marker.mesh.userData = { ...marker.mesh.userData, ...updates };
-        }
-    }
-
-    // 載入所有標記
-    loadMarkers() {
-        const markers = markerDataManager.getAllMarkers();
-        markers.forEach(markerData => {
-            this.addMarker(markerData);
-        });
-    }
-
-    // 點擊檢測
-    onMouseClick(event) {
-        const rect = this.renderer.domElement.getBoundingClientRect();
-        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-
-        if (this.isSelectingPosition) {
-            // 選擇位置模式：檢測與地圖的交點
-            // 使用所有模型進行檢測
-            const allModels = [];
-            if (this.mapModels) {
-                Object.values(this.mapModels).forEach(model => {
-                    if (model) allModels.push(model);
-                });
-            }
-            if (this.mapModel) {
-                allModels.push(this.mapModel);
-            }
-            
-            let intersects = [];
-            for (const model of allModels) {
-                const modelIntersects = this.raycaster.intersectObject(model, true);
-                intersects = intersects.concat(modelIntersects);
-            }
-            
-            if (intersects.length > 0) {
-                // 選擇最近的交點
-                intersects.sort((a, b) => a.distance - b.distance);
-                const point = intersects[0].point;
-                if (this.selectPositionCallback) {
-                    this.selectPositionCallback(point);
-                }
-                this.stopSelectPosition();
-                event.preventDefault();
-                event.stopPropagation();
-                return;
-            } else {
-                // 如果沒有點到模型，提示用戶
-                console.warn('未檢測到模型交點，請點擊地圖上的模型表面');
-            }
-        } else {
-            // 編輯模式下，如果沒有正在拖動，可以點擊查看地標資訊
-            // 正常模式：檢測標記點擊
-            const markerObjects = this.markers.map(m => m.mesh);
-            const intersects = this.raycaster.intersectObjects(markerObjects);
-            
-            if (intersects.length > 0) {
-                const marker = intersects[0].object;
-                this.onMarkerClick(marker.userData.id);
-            } else {
-                // 點擊空白處，隱藏資訊面板
-                this.hideInfoPanel();
-            }
-        }
-    }
-
-    // 標記點擊處理
-    onMarkerClick(markerId) {
-        const marker = markerDataManager.getMarker(markerId);
-        if (!marker) return;
-
-        this.showInfoPanel(marker);
-        this.currentMarkerId = markerId;
-
-        // 鏡頭平滑移動到該標記（模仿 Google Map 點地標的滑動效果）
-        const markerObj = this.markers.find(m => m.id === markerId);
-        if (markerObj) {
-            this.flyTo(markerObj.mesh.position);
-        }
-
-        // 觸發標記點擊事件（給其他模組用）
-        if (window.onMarkerClick) {
-            window.onMarkerClick(marker);
-        }
-    }
-
-    // 顯示資訊面板
-    showInfoPanel(marker) {
-        const panel = document.getElementById('infoPanel');
-        const title = document.getElementById('infoTitle');
-        const description = document.getElementById('infoDescription');
-        const image = document.getElementById('infoImage');
-        const imageContainer = document.getElementById('infoImageContainer');
-
-        title.textContent = marker.name;
-        description.innerHTML = `<p>${marker.description || '無簡介'}</p>`;
-
-        if (marker.imageData) {
-            image.src = marker.imageData;
-            imageContainer.style.display = 'block';
-        } else {
-            imageContainer.style.display = 'none';
-        }
-
-        panel.classList.remove('hidden');
-    }
-
-    // 隱藏資訊面板
-    hideInfoPanel() {
-        const panel = document.getElementById('infoPanel');
-        panel.classList.add('hidden');
-        this.currentMarkerId = null;
-    }
-
-    // 開始選擇位置
-    startSelectPosition(callback) {
-        this.isSelectingPosition = true;
-        this.selectPositionCallback = callback;
-    }
-
-    // 停止選擇位置
-    stopSelectPosition() {
-        this.isSelectingPosition = false;
-        this.selectPositionCallback = null;
-    }
-
     // 重置視角
     resetView() {
         // 優先使用多模型系統
@@ -689,54 +441,6 @@ class Map3D {
         this.camera.position.add(direction.multiplyScalar(delta));
     }
 
-    // 切換線框模式
-    toggleWireframe() {
-        // 更新狀態旗標
-        this.isWireframe = !this.isWireframe;
-
-        // 處理所有模型的線框模式
-        const processModel = (model) => {
-            if (!model) return;
-            
-            if (model.traverse) {
-                model.traverse((child) => {
-                    if (child.isMesh && child.material) {
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach((mat) => {
-                                if (mat && 'wireframe' in mat) {
-                                    mat.wireframe = this.isWireframe;
-                                }
-                            });
-                        } else if ('wireframe' in child.material) {
-                            child.material.wireframe = this.isWireframe;
-                        }
-                    }
-                });
-            } else {
-                // 備援：舊版單一 Mesh 寫法
-                const material = model.material;
-                if (!material) return;
-                if (Array.isArray(material)) {
-                    material.forEach((mat) => {
-                        if (mat && 'wireframe' in mat) {
-                            mat.wireframe = this.isWireframe;
-                        }
-                    });
-                } else if ('wireframe' in material) {
-                    material.wireframe = this.isWireframe;
-                }
-            }
-        };
-
-        // 優先使用多模型系統
-        if (this.mapModels && Object.keys(this.mapModels).length > 0) {
-            Object.values(this.mapModels).forEach(processModel);
-        } else if (this.mapModel) {
-            // 向後兼容單模型系統
-            processModel(this.mapModel);
-        }
-    }
-
     // 視窗大小變化處理
     onWindowResize() {
         const width = this.container.clientWidth;
@@ -756,15 +460,13 @@ class Map3D {
         let cameraDistance = 0; // 相機距離中心的距離
 
         this.renderer.domElement.addEventListener('mousedown', (e) => {
-            // 選擇位置模式優先：不處理地標拖動和地圖旋轉
-            if (this.isSelectingPosition) {
-                // 在選擇位置模式下，不啟動地圖拖動
-                // 但允許點擊事件正常觸發
+            // 街景模式下禁用滑鼠控制
+            if (this.isStreetViewMode) {
                 return;
             }
             
-            // 右鍵：旋轉鏡頭（優先處理，不受編輯模式影響）
-            if (e.button === 2 && !this.draggingMarker && !this.isSelectingPosition) {
+            // 右鍵：旋轉鏡頭
+            if (e.button === 2) {
                 isRotating = true;
                 previousMousePosition = { x: e.clientX, y: e.clientY };
                 
@@ -788,32 +490,8 @@ class Map3D {
                 e.preventDefault();
             }
             
-            // 編輯模式下，檢查是否點擊了地標（只對左鍵有效）
-            if (this.isEditMode && e.button === 0) {
-                const rect = this.renderer.domElement.getBoundingClientRect();
-                this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-                this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-                this.raycaster.setFromCamera(this.mouse, this.camera);
-                
-                const markerObjects = this.markers.map(m => m.mesh);
-                const intersects = this.raycaster.intersectObjects(markerObjects);
-                
-                if (intersects.length > 0) {
-                    // 開始拖動地標
-                    this.draggingMarker = intersects[0].object;
-                    // 記錄地標的初始 Y 位置（用於保持高度）
-                    const marker = this.markers.find(m => m.mesh === this.draggingMarker);
-                    if (marker) {
-                        this.dragStartY = marker.mesh.position.y;
-                    }
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                }
-            }
-            
-            // 左鍵：平移鏡頭（編輯模式下如果沒點到地標，也可以平移）
-            if (e.button === 0 && !this.draggingMarker && !this.isSelectingPosition) {
+            // 左鍵：平移鏡頭
+            if (e.button === 0) {
                 isPanning = true;
                 previousMousePosition = { x: e.clientX, y: e.clientY };
                 e.preventDefault();
@@ -821,55 +499,13 @@ class Map3D {
         });
 
         this.renderer.domElement.addEventListener('mousemove', (e) => {
-            // 編輯模式下拖動地標
-            if (this.draggingMarker) {
-                const rect = this.renderer.domElement.getBoundingClientRect();
-                this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-                this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-                this.raycaster.setFromCamera(this.mouse, this.camera);
-                
-                // 使用所有模型進行檢測，找到射線與地圖的交點
-                const allModels = [];
-                if (this.mapModels) {
-                    Object.values(this.mapModels).forEach(model => {
-                        if (model) allModels.push(model);
-                    });
-                }
-                if (this.mapModel) {
-                    allModels.push(this.mapModel);
-                }
-                
-                let intersects = [];
-                for (const model of allModels) {
-                    const modelIntersects = this.raycaster.intersectObject(model, true);
-                    intersects = intersects.concat(modelIntersects);
-                }
-                
-                if (intersects.length > 0) {
-                    // 選擇最近的交點
-                    intersects.sort((a, b) => a.distance - b.distance);
-                    const intersection = intersects[0].point;
-                    
-                    // 保持地標的 Y 位置（或使用交點的 Y 位置）
-                    const newY = this.dragStartY !== undefined ? this.dragStartY : intersection.y;
-                    
-                    // 更新地標位置
-                    this.draggingMarker.position.set(intersection.x, newY, intersection.z);
-                    
-                    // 更新地標標籤位置
-                    const marker = this.markers.find(m => m.mesh === this.draggingMarker);
-                    if (marker && marker.sprite) {
-                        marker.sprite.position.copy(this.draggingMarker.position);
-                        marker.sprite.position.y += 5;
-                    }
-                }
-                e.preventDefault();
-                e.stopPropagation();
+            // 街景模式下禁用滑鼠控制
+            if (this.isStreetViewMode) {
                 return;
             }
             
             // 右鍵拖動：旋轉鏡頭（不固定看向中心點）
-            if (isRotating && !this.isSelectingPosition) {
+            if (isRotating) {
                 const deltaX = previousMousePosition.x - e.clientX;
                 const deltaY = previousMousePosition.y - e.clientY;
 
@@ -890,7 +526,7 @@ class Map3D {
             }
             
             // 左鍵拖動：平移鏡頭（與滑鼠游標移動速度一致）
-            if (isPanning && !this.isSelectingPosition) {
+            if (isPanning) {
                 const deltaX = e.clientX - previousMousePosition.x;
                 const deltaY = e.clientY - previousMousePosition.y;
                 
@@ -934,30 +570,6 @@ class Map3D {
         });
 
         this.renderer.domElement.addEventListener('mouseup', () => {
-            // 編輯模式下，結束拖動地標並保存
-            if (this.draggingMarker) {
-                const marker = this.markers.find(m => m.mesh === this.draggingMarker);
-                if (marker) {
-                    // 保存地標位置
-                    const newPosition = {
-                        x: this.draggingMarker.position.x,
-                        y: this.draggingMarker.position.y,
-                        z: this.draggingMarker.position.z
-                    };
-                    
-                    // 更新資料管理器
-                    markerDataManager.updateMarker(marker.id, { position: newPosition });
-                    
-                    // 更新標記資料
-                    marker.data.position = newPosition;
-                    
-                    console.log('地標位置已保存:', marker.id, newPosition);
-                }
-                
-                this.draggingMarker = null;
-                this.dragStartY = undefined;
-            }
-            
             isRotating = false;
             isPanning = false;
         });
@@ -967,18 +579,13 @@ class Map3D {
             e.preventDefault();
         });
 
-        this.renderer.domElement.addEventListener('click', (e) => {
-            // 如果正在拖動地標，不觸發點擊事件
-            if (this.draggingMarker) {
-                return;
-            }
-            
-            // 處理點擊事件
-            this.onMouseClick(e);
-        });
 
         // 滾輪縮放
         this.renderer.domElement.addEventListener('wheel', (e) => {
+            // 街景模式下禁用滾輪縮放
+            if (this.isStreetViewMode) {
+                return;
+            }
             e.preventDefault();
             // 調整縮放速度並反轉方向：滾輪往前 = 拉近，相反則拉遠
             const delta = -e.deltaY * this.zoomSpeed;
@@ -1063,6 +670,11 @@ function initMap() {
     
     console.log('所有資源載入完成，開始初始化地圖...');
     map3D = new Map3D('canvas-container');
+    window.map3D = map3D; // 設置為全域變數，供其他模組使用
+    console.log('map3D 初始化完成，已設置為 window.map3D');
+    
+    // 觸發自訂事件，通知其他模組 map3D 已準備好
+    window.dispatchEvent(new CustomEvent('map3DReady', { detail: map3D }));
 }
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -10,7 +10,7 @@ class StreetViewController {
         this.groundY = 6;       // 相機高度（視為站在地面上的高度）
 
         // 碰撞相關設定
-        this.collisionRadius = 3;                  // 與牆壁保持的最小距離
+        this.collisionRadius = 0.8;                // 與牆壁保持的最小距離（進一步降低）
         this.maxStepDistance = this.moveSpeed * 2; // 單步最大檢查距離（保險一點）
         this.raycaster = new THREE.Raycaster();    // 用來偵測前方是否有碰撞物
 
@@ -35,8 +35,6 @@ class StreetViewController {
         if (this.active) return;
         this.active = true;
         this.attachKeyboard();
-        // 街景模式下隱藏地標名稱標籤
-        this.setMarkerLabelsVisible(false);
         // 街景模式：只顯示建築物和地板，隱藏其他模型（如建築名稱）
         if (this.map3D && this.map3D.setStreetViewMode) {
             this.map3D.setStreetViewMode(true);
@@ -52,8 +50,6 @@ class StreetViewController {
         if (!this.active) return;
         this.active = false;
         this.detachKeyboard();
-        // 離開街景後恢復地標名稱標籤
-        this.setMarkerLabelsVisible(true);
         // 正常模式：顯示所有模型
         if (this.map3D && this.map3D.setStreetViewMode) {
             this.map3D.setStreetViewMode(false);
@@ -79,20 +75,11 @@ class StreetViewController {
         window.removeEventListener('keyup', this._onKeyUp);
     }
 
-    // 控制地標名稱標籤是否顯示
-    setMarkerLabelsVisible(visible) {
-        if (!this.map3D || !Array.isArray(this.map3D.markers)) return;
-        this.map3D.markers.forEach(marker => {
-            if (marker.sprite) {
-                marker.sprite.visible = visible;
-            }
-        });
-    }
-
     // 把相機放到模型附近的「地面」高度
     placeCameraOnGround() {
         const camera = this.map3D.camera;
         let pos = new THREE.Vector3(0, this.groundY, 30);
+        let groundLevel = 0; // 地面高度
 
         // 優先使用多模型系統
         if (this.map3D.mapModels && (this.map3D.mapModels.building || this.map3D.mapModels.ground)) {
@@ -102,22 +89,32 @@ class StreetViewController {
             
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
-            const radius = Math.max(size.x, size.z) * 0.4;
-
-            pos.set(center.x, center.y + this.groundY, center.z + radius);
+            const min = box.min; // 獲取最小邊界（通常是地面）
+            groundLevel = min.y; // 使用地面的 Y 座標
+            
+            // 計算一個在地面上的起始位置（在模型邊緣附近）
+            const radius = Math.max(size.x, size.z) * 0.3; // 稍微靠近中心一點
+            
+            // 將相機放在地面上方（使用實際地面高度 + 相機高度）
+            pos.set(center.x, groundLevel + this.groundY, center.z + radius);
         } else if (this.map3D.mapModel) {
             // 向後兼容單模型系統
             const box = new THREE.Box3().setFromObject(this.map3D.mapModel);
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
-            const radius = Math.max(size.x, size.z) * 0.4;
-
-            pos.set(center.x, center.y + this.groundY, center.z + radius);
+            const min = box.min;
+            groundLevel = min.y;
+            
+            const radius = Math.max(size.x, size.z) * 0.3;
+            pos.set(center.x, groundLevel + this.groundY, center.z + radius);
         }
+
+        // 更新 groundY 為實際的地面高度 + 相機高度
+        this.groundY = groundLevel + 6;
 
         camera.position.copy(pos);
 
-        // 先朝向 -Z 方向
+        // 先朝向 -Z 方向（朝向模型中心）
         const target = new THREE.Vector3(pos.x, pos.y, pos.z - 10);
         camera.lookAt(target);
 
@@ -243,30 +240,93 @@ class StreetViewController {
 
                 if (distance > 0) {
                     const dir = horizontalMove.clone().normalize();
-
-                    // 從相機位置稍微抬高一點往前打射線
                     const origin = camera.position.clone();
-                    origin.y = this.groundY;
+                    origin.y -= 1; // 稍微降低射線起點
 
+                    // 檢查移動方向是否有碰撞
                     this.raycaster.set(origin, dir);
-                    // 射線長度：這一步要走的距離 + 安全半徑
                     const maxDistance = Math.min(distance + this.collisionRadius, this.maxStepDistance);
                     
-                    // 檢測所有碰撞物件
                     let hit = null;
+                    let minHitDistance = Infinity;
+                    
                     for (const obj of collisionObjects) {
+                        // 只檢測 Mesh 物件，排除邊框線（LineSegments）
                         const intersects = this.raycaster.intersectObject(obj, true);
-                        const foundHit = intersects.find(h => h.distance <= maxDistance);
-                        if (foundHit) {
-                            hit = foundHit;
-                            break;
+                        for (const intersection of intersects) {
+                            // 過濾掉邊框線：檢查物件類型，只保留 Mesh
+                            const object = intersection.object;
+                            // 跳過 LineSegments（邊框線）和 Line（線條）
+                            if (object.isLineSegments || object.isLine) {
+                                continue;
+                            }
+                            // 只檢測 Mesh 物件
+                            if (object.isMesh && intersection.distance <= maxDistance && intersection.distance < minHitDistance) {
+                                hit = intersection;
+                                minHitDistance = intersection.distance;
+                            }
                         }
                     }
 
-                    // 如果前方太近有牆，就不要往那個方向移動
+                    // 改進的碰撞處理：允許側向滑動，避免被黏住
                     if (hit) {
-                        // 直接把 move 設為 0，等於這一幀不移動
-                        move.set(0, 0, 0);
+                        const hitDistance = hit.distance;
+                        
+                        // 如果碰撞距離小於安全半徑，需要處理
+                        if (hitDistance < this.collisionRadius) {
+                            // 分析移動方向：主要是前進/後退還是側向
+                            const forwardComponent = Math.abs(forward.dot(dir));
+                            const rightComponent = Math.abs(right.dot(dir));
+                            
+                            // 如果主要是側向移動（左右），允許側向滑動
+                            if (rightComponent > forwardComponent * 1.5) {
+                                // 側向移動：檢查側向是否有足夠空間
+                                const sideDir = right.clone().multiplyScalar(Math.sign(right.dot(dir)));
+                                this.raycaster.set(origin, sideDir);
+                                let sideHit = null;
+                                let sideHitDistance = Infinity;
+                                
+                                for (const obj of collisionObjects) {
+                                    const intersects = this.raycaster.intersectObject(obj, true);
+                                    for (const intersection of intersects) {
+                                        // 過濾掉邊框線
+                                        const object = intersection.object;
+                                        if (object.isLineSegments || object.isLine) {
+                                            continue;
+                                        }
+                                        // 只檢測 Mesh 物件
+                                        if (object.isMesh && intersection.distance <= distance + this.collisionRadius && 
+                                            intersection.distance < sideHitDistance) {
+                                            sideHit = intersection;
+                                            sideHitDistance = intersection.distance;
+                                        }
+                                    }
+                                }
+                                
+                                // 如果側向有足夠空間，允許側向移動
+                                if (!sideHit || sideHitDistance >= this.collisionRadius) {
+                                    // 允許側向移動，但限制前進/後退分量
+                                    const forwardMove = forward.clone().multiplyScalar(forward.dot(move));
+                                    const rightMove = right.clone().multiplyScalar(right.dot(move));
+                                    // 只保留側向移動，移除前進/後退分量
+                                    move.copy(rightMove);
+                                } else {
+                                    // 側向也有牆，完全阻止
+                                    move.set(0, 0, 0);
+                                }
+                            } else {
+                                // 主要是前進/後退，如果會撞牆就阻止
+                                move.set(0, 0, 0);
+                            }
+                        } else if (hitDistance < distance + this.collisionRadius) {
+                            // 會撞到牆但還有空間，調整移動距離
+                            const safeDistance = Math.max(0, hitDistance - this.collisionRadius);
+                            if (safeDistance > 0.1) {
+                                move.normalize().multiplyScalar(safeDistance);
+                            } else {
+                                move.set(0, 0, 0);
+                            }
+                        }
                     }
                 }
             }
@@ -289,27 +349,54 @@ class StreetViewController {
 
 // 全域街景控制器實例
 let streetViewController = null;
+let streetViewSetup = false;
 
-function setupStreetViewWhenReady() {
-    // map3D 在 map3d.js 中以全域變數建立
-    if (typeof map3D !== 'undefined' && map3D) {
-        streetViewController = new StreetViewController(map3D);
+function setupStreetView() {
+    // 避免重複設置
+    if (streetViewSetup) return;
+    
+    if (!window.map3D) {
+        console.warn('map3D 尚未初始化，無法設置街景模式');
+        return;
+    }
+    
+    console.log('設置街景模式...');
+    streetViewController = new StreetViewController(window.map3D);
 
-        const btn = document.getElementById('streetViewBtn');
-        if (btn) {
-            btn.addEventListener('click', () => {
+    const btn = document.getElementById('streetViewBtn');
+    if (btn) {
+        btn.onclick = () => {
+            console.log('點擊街景模式按鈕');
+            if (streetViewController) {
                 streetViewController.toggle();
                 btn.textContent = streetViewController.active ? '離開街景' : '街景模式';
-            });
-        }
+            } else {
+                console.error('streetViewController 不存在');
+            }
+        };
+        console.log('街景模式按鈕事件監聽器已設置');
     } else {
-        // map3D 尚未建立，稍後再試
-        setTimeout(setupStreetViewWhenReady, 200);
+        console.warn('找不到 streetViewBtn');
     }
+    
+    streetViewSetup = true;
+    console.log('街景模式設置完成');
 }
 
+// 監聽 map3D 準備好的事件
+window.addEventListener('map3DReady', () => {
+    console.log('收到 map3DReady 事件，設置街景模式');
+    setupStreetView();
+});
+
+// 如果事件已經觸發，直接設置
 document.addEventListener('DOMContentLoaded', () => {
-    setupStreetViewWhenReady();
+    // 先嘗試設置（如果 map3D 已經初始化）
+    if (window.map3D) {
+        setupStreetView();
+    }
+    // 同時也監聽事件（以防 map3D 稍後才初始化）
+    window.addEventListener('map3DReady', setupStreetView);
 });
 
 

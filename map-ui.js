@@ -1,36 +1,79 @@
 // 地圖 UI 控制（模仿 Google Map 右下角的縮放與羅盤按鈕）
 
-document.addEventListener('DOMContentLoaded', () => {
+let mapUISetup = false;
+
+function setupMapUI() {
+    // 避免重複設置
+    if (mapUISetup) return;
+    
+    if (!window.map3D) {
+        console.warn('map3D 尚未初始化，無法設置 UI 按鈕');
+        return;
+    }
+    
+    console.log('設置地圖 UI 控制按鈕...');
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
-    const northResetBtn = document.getElementById('northResetBtn');
+    const resetViewBtn = document.getElementById('resetViewBtn');
 
     if (zoomInBtn) {
-        zoomInBtn.addEventListener('click', () => {
-            if (window.map3D) {
-                // 正值代表往前拉近
-                map3D.applyZoom(8);
+        zoomInBtn.onclick = () => {
+            console.log('點擊縮放+按鈕');
+            if (window.map3D && window.map3D.applyZoom) {
+                window.map3D.applyZoom(8);
+            } else {
+                console.error('map3D 或 applyZoom 方法不存在');
             }
-        });
+        };
+    } else {
+        console.warn('找不到 zoomInBtn');
     }
 
     if (zoomOutBtn) {
-        zoomOutBtn.addEventListener('click', () => {
-            if (window.map3D) {
-                // 負值代表往後拉遠
-                map3D.applyZoom(-8);
+        zoomOutBtn.onclick = () => {
+            console.log('點擊縮放-按鈕');
+            if (window.map3D && window.map3D.applyZoom) {
+                window.map3D.applyZoom(-8);
+            } else {
+                console.error('map3D 或 applyZoom 方法不存在');
             }
-        });
+        };
+    } else {
+        console.warn('找不到 zoomOutBtn');
     }
 
-    if (northResetBtn) {
-        northResetBtn.addEventListener('click', () => {
-            if (window.map3D) {
-                // 使用既有的 resetView 當作「回到預設視角」
-                map3D.resetView();
+    if (resetViewBtn) {
+        resetViewBtn.onclick = () => {
+            console.log('點擊重置視角按鈕');
+            if (window.map3D && window.map3D.resetView) {
+                window.map3D.resetView();
+            } else {
+                console.error('map3D 或 resetView 方法不存在');
             }
-        });
+        };
+        console.log('重置視角按鈕事件監聽器已設置');
+    } else {
+        console.warn('找不到 resetViewBtn');
     }
+    
+    mapUISetup = true;
+    console.log('地圖 UI 控制按鈕設置完成');
+}
+
+// 監聽 map3D 準備好的事件
+window.addEventListener('map3DReady', () => {
+    console.log('收到 map3DReady 事件，設置 UI 按鈕');
+    setupMapUI();
+});
+
+// 如果事件已經觸發，直接設置
+document.addEventListener('DOMContentLoaded', () => {
+    // 先嘗試設置（如果 map3D 已經初始化）
+    if (window.map3D) {
+        setupMapUI();
+    }
+    // 同時也監聽事件（以防 map3D 稍後才初始化）
+    window.addEventListener('map3DReady', setupMapUI);
 });
 
 
