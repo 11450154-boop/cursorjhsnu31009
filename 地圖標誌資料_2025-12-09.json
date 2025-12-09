@@ -1,0 +1,176 @@
+{
+  "version": "1.0",
+  "exportDate": "2025-12-09T13:37:01.018Z",
+  "markers": [
+    {
+      "id": "photo_7721df90",
+      "name": "中正樓.jpg",
+      "imagePath": "中正樓.jpg",
+      "position": {
+        "x": 14.47549870705513,
+        "y": 17.279999460492803,
+        "z": 65.39383107404358
+      }
+    },
+    {
+      "id": "photo_2e74c75a",
+      "name": "中興堂.jpg",
+      "imagePath": "中興堂.jpg",
+      "position": {
+        "x": 61.8,
+        "y": 10.3,
+        "z": 95.6
+      }
+    },
+    {
+      "id": "photo_d8ed88f",
+      "name": "南樓.jpg",
+      "imagePath": "南樓.jpg",
+      "position": {
+        "x": 28.2,
+        "y": 21.6,
+        "z": 105.9
+      }
+    },
+    {
+      "id": "photo_223c3a77",
+      "name": "司令台.jpg",
+      "imagePath": "司令台.jpg",
+      "position": {
+        "x": -14.8,
+        "y": 18,
+        "z": -70.4
+      }
+    },
+    {
+      "id": "photo_1b197567",
+      "name": "國中部.jpg",
+      "imagePath": "國中部.jpg",
+      "position": {
+        "x": -84.6,
+        "y": 20.6,
+        "z": 11.6
+      }
+    },
+    {
+      "id": "photo_123c5347",
+      "name": "圖書館.jpg",
+      "imagePath": "圖書館.jpg",
+      "position": {
+        "x": -47.2,
+        "y": 20.6,
+        "z": -19.4
+      }
+    },
+    {
+      "id": "photo_71cc68de",
+      "name": "技藝館.jpg",
+      "imagePath": "技藝館.jpg",
+      "position": {
+        "x": 59.9,
+        "y": 21.9,
+        "z": 55.4
+      }
+    },
+    {
+      "id": "photo_2288c986",
+      "name": "操場.jpg",
+      "imagePath": "操場.jpg",
+      "position": {
+        "x": 27.5,
+        "y": 0.6,
+        "z": -53.9
+      }
+    },
+    {
+      "id": "photo_2bfded81",
+      "name": "新北樓.jpg",
+      "imagePath": "新北樓.jpg",
+      "position": {
+        "x": 21.1,
+        "y": 21.6,
+        "z": 20.5
+      }
+    },
+    {
+      "id": "photo_5ad944b5",
+      "name": "東樓.jpg",
+      "imagePath": "東樓.jpg",
+      "position": {
+        "x": 32.4,
+        "y": 8.7,
+        "z": 69.1
+      }
+    },
+    {
+      "id": "photo_14df210e",
+      "name": "校門.jpg",
+      "imagePath": "校門.jpg",
+      "position": {
+        "x": 2.3,
+        "y": 10.3,
+        "z": 129.1
+      }
+    },
+    {
+      "id": "photo_1e01b4e4",
+      "name": "樂教館.jpg",
+      "imagePath": "樂教館.jpg",
+      "position": {
+        "x": -4.2,
+        "y": 21.9,
+        "z": -119.3
+      }
+    },
+    {
+      "id": "photo_558bbc6e",
+      "name": "淡水信義線第二出口.jpeg",
+      "imagePath": "淡水信義線第二出口.jpeg",
+      "position": {
+        "x": 45.2,
+        "y": 0,
+        "z": 129
+      }
+    },
+    {
+      "id": "photo_6491fca7",
+      "name": "舊北樓.jpg",
+      "imagePath": "舊北樓.jpg",
+      "position": {
+        "x": 21.1,
+        "y": 10.3,
+        "z": -5.3
+      }
+    },
+    {
+      "id": "photo_77823b67",
+      "name": "西樓.jpg",
+      "imagePath": "西樓.jpg",
+      "position": {
+        "x": -47.2,
+        "y": 8.6,
+        "z": 68.2
+      }
+    },
+    {
+      "id": "photo_7e052de2",
+      "name": "體育教學館.jpg",
+      "imagePath": "體育教學館.jpg",
+      "position": {
+        "x": -85.5,
+        "y": 15.4,
+        "z": -20.6
+      }
+    },
+    {
+      "id": "photo_58b2947d",
+      "name": "體育館.jpg",
+      "imagePath": "體育館.jpg",
+      "position": {
+        "x": -83.5,
+        "y": 21.6,
+        "z": 101.6
+      }
+    }
+  ]
+}

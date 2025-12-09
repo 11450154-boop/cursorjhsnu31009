@@ -100,10 +100,25 @@ class PhotoMarkerManager {
                 position: marker.position
             }));
             
-            localStorage.setItem('photoMarkers', JSON.stringify(dataToSave));
+            const jsonStr = JSON.stringify(dataToSave);
+            localStorage.setItem('photoMarkers', jsonStr);
             console.log(`已儲存 ${this.markers.length} 個圖片標誌到 localStorage`);
+            
+            // 驗證儲存是否成功
+            const saved = localStorage.getItem('photoMarkers');
+            if (saved === jsonStr) {
+                console.log('✓ 儲存驗證成功');
+            } else {
+                console.warn('⚠ 儲存驗證失敗，可能 LocalStorage 空間不足或被禁用');
+                alert('警告：資料可能未正確儲存。請檢查瀏覽器設定或清除部分資料。');
+            }
         } catch (e) {
             console.error('儲存標誌資料失敗:', e);
+            if (e.name === 'QuotaExceededError') {
+                alert('錯誤：LocalStorage 空間不足。請清除部分瀏覽器資料或使用匯出功能備份資料。');
+            } else {
+                alert('儲存失敗：' + e.message);
+            }
         }
     }
 
