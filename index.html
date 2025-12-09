@@ -13,6 +13,11 @@
         <header>
             <h1>師大附中 3D 校園地圖</h1>
             <div class="header-tools">
+                <!-- 搜尋框 -->
+                <div class="search-container">
+                    <input type="text" id="searchInput" class="search-input" placeholder="搜尋地點...">
+                    <div id="searchResults" class="search-results hidden"></div>
+                </div>
                 <div class="controls">
                     <button id="setupMarkerPosBtn" class="btn">設定標誌位置</button>
                     <button id="streetViewBtn" class="btn">街景模式</button>
@@ -119,10 +124,11 @@
     <!-- 自訂腳本 -->
     <script src="js/photo-marker.js"></script>
     <script src="js/photo-marker-editor.js"></script>
-    <script src="model-loader.js"></script>
+    <script src="js/model-loader.js"></script>
     <script src="map3d.js"></script>
     <script src="street-view.js"></script>
     <script src="map-ui.js"></script>
+    <script src="js/map-search.js"></script>
 </body>
 </html>
 

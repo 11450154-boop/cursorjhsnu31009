@@ -111,9 +111,9 @@ class Map3D {
     // 載入所有模型檔案
     loadAllModels() {
         const modelsToLoad = [
-            { path: 'building.obj', type: 'building', name: '建築物' },
-            { path: 'ground.obj', type: 'ground', name: '地板' },
-            { path: 'building name.obj', type: 'buildingName', name: '建築名稱' }
+            { path: 'models/building.obj', type: 'building', name: '建築物' },
+            { path: 'models/ground.obj', type: 'ground', name: '地板' },
+            { path: 'models/building name.obj', type: 'buildingName', name: '建築名稱' }
         ];
         
         let loadedCount = 0;
@@ -500,8 +500,9 @@ class Map3D {
     createMarkerSprite(text) {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
-        canvas.width = 256;
-        canvas.height = 64;
+        // 增大 canvas 尺寸以容納更大的文字
+        canvas.width = 384;
+        canvas.height = 96;
         
         // 繪製背景
         context.fillStyle = 'rgba(102, 126, 234, 0.9)';
@@ -509,12 +510,12 @@ class Map3D {
         
         // 繪製邊框
         context.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        context.lineWidth = 2;
+        context.lineWidth = 3;
         context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
         
-        // 繪製文字
+        // 繪製文字（放大字體）
         context.fillStyle = 'white';
-        context.font = 'bold 20px Microsoft JhengHei';
+        context.font = 'bold 32px Microsoft JhengHei';
         context.textAlign = 'center';
         context.textBaseline = 'middle';
         context.fillText(text, canvas.width / 2, canvas.height / 2);
@@ -522,7 +523,8 @@ class Map3D {
         const texture = new THREE.CanvasTexture(canvas);
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
         const sprite = new THREE.Sprite(spriteMaterial);
-        sprite.scale.set(15, 4, 1);
+        // 相應增大 sprite 縮放以匹配更大的文字
+        sprite.scale.set(22, 6, 1);
         
         return sprite;
     }
@@ -566,8 +568,12 @@ class Map3D {
 
         title.textContent = marker.name.replace(/\.(jpg|jpeg|png)$/i, '');
 
-        // 載入圖片
-        image.src = marker.imagePath;
+        // 載入圖片（確保路徑包含 images/ 前綴）
+        let imagePath = marker.imagePath;
+        if (!imagePath.startsWith('images/') && !imagePath.startsWith('/images/') && !imagePath.startsWith('http')) {
+            imagePath = 'images/' + imagePath;
+        }
+        image.src = imagePath;
         image.onload = () => {
             imageContainer.style.display = 'block';
         };
