@@ -9,26 +9,10 @@ class DataExport {
         this.setupImportButton();
     }
 
-    // 設置匯出按鈕
+    // 設置匯出按鈕（已禁用）
     setupExportButton() {
-        // 創建匯出按鈕（如果不存在）
-        let exportBtn = document.getElementById('exportDataBtn');
-        if (!exportBtn) {
-            exportBtn = document.createElement('button');
-            exportBtn.id = 'exportDataBtn';
-            exportBtn.className = 'btn';
-            exportBtn.textContent = '匯出資料';
-            
-            // 插入到控制按鈕區域
-            const controls = document.querySelector('.controls');
-            if (controls) {
-                controls.insertBefore(exportBtn, controls.firstChild);
-            }
-        }
-        
-        exportBtn.addEventListener('click', () => {
-            this.exportData();
-        });
+        // 匯出功能已移除，不再創建按鈕
+        return;
     }
 
     // 設置匯入按鈕
@@ -65,7 +49,7 @@ class DataExport {
             // 插入到控制按鈕區域
             const controls = document.querySelector('.controls');
             if (controls) {
-                controls.insertBefore(importBtn, controls.firstChild.nextSibling);
+                controls.insertBefore(importBtn, controls.firstChild);
             }
         }
     }

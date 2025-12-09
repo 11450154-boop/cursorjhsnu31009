@@ -20,9 +20,13 @@ class Map3D {
         this.cameraAnimation = null;
         // 街景模式狀態（用於禁用滑鼠控制）
         this.isStreetViewMode = false;
+        // 滑鼠鎖定狀態
+        this.isMouseLocked = false;
+        this.mouseLockButton = null;
         
         this.init();
         this.setupEventListeners();
+        this.setupMouseLock();
         this.loadModel();
     }
 
@@ -792,9 +796,19 @@ class Map3D {
             }
         });
 
-        this.renderer.domElement.addEventListener('mouseup', () => {
-            isRotating = false;
-            isPanning = false;
+        this.renderer.domElement.addEventListener('mouseup', (e) => {
+            // 在 Pointer Lock 模式下，不重置狀態（讓 Pointer Lock 的處理接管）
+            if (!this.isMouseLocked) {
+                isRotating = false;
+                isPanning = false;
+            } else {
+                // Pointer Lock 模式下，只處理右鍵釋放
+                if (e.button === 2) {
+                    isRotating = false;
+                } else if (e.button === 0) {
+                    isPanning = false;
+                }
+            }
         });
         
         // 防止右鍵選單
@@ -810,13 +824,30 @@ class Map3D {
             }
 
             // 如果正在拖動，不觸發點擊
-            if (isRotating || isPanning) {
-                return;
+            // 在 Pointer Lock 模式下，檢查按鈕狀態
+            if (this.isMouseLocked) {
+                if (isRightButtonDownLocked || isLeftButtonDownLocked) {
+                    return;
+                }
+            } else {
+                if (isRotating || isPanning) {
+                    return;
+                }
             }
 
-            const rect = this.renderer.domElement.getBoundingClientRect();
-            this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            // 在 Pointer Lock 模式下，使用中心點作為點擊位置
+            let mouseX, mouseY;
+            if (this.isMouseLocked) {
+                // Pointer Lock 模式下，點擊位置在視窗中心
+                mouseX = 0;
+                mouseY = 0;
+            } else {
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            }
+            this.mouse.x = mouseX;
+            this.mouse.y = mouseY;
 
             this.raycaster.setFromCamera(this.mouse, this.camera);
 
@@ -897,6 +928,141 @@ class Map3D {
             const delta = -e.deltaY * this.zoomSpeed;
             this.applyZoom(delta);
         });
+
+        // Pointer Lock 模式下的滑鼠移動（使用 movementX/Y）
+        // 追蹤按鈕狀態
+        let isRightButtonDownLocked = false;
+        let isLeftButtonDownLocked = false;
+        
+        // 在 Pointer Lock 模式下，需要單獨處理按鈕狀態
+        const handleLockedMouseDown = (e) => {
+            if (this.isMouseLocked) {
+                if (e.button === 2) {
+                    isRightButtonDownLocked = true;
+                } else if (e.button === 0) {
+                    isLeftButtonDownLocked = true;
+                }
+            }
+        };
+        
+        const handleLockedMouseUp = (e) => {
+            if (e.button === 2) {
+                isRightButtonDownLocked = false;
+            } else if (e.button === 0) {
+                isLeftButtonDownLocked = false;
+            }
+        };
+        
+        // 使用 capture 階段確保能捕獲到事件
+        this.renderer.domElement.addEventListener('mousedown', handleLockedMouseDown, true);
+        this.renderer.domElement.addEventListener('mouseup', handleLockedMouseUp, true);
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!this.isMouseLocked) return;
+            if (this.isStreetViewMode) return;
+            if (this.isSelectingPosition) return;
+
+            // 使用 movementX/Y 來獲取相對移動（不受視窗邊界限制）
+            if (e.movementX !== undefined && e.movementY !== undefined) {
+                const deltaX = e.movementX;
+                const deltaY = e.movementY;
+
+                // 右鍵：旋轉相機
+                if (isRightButtonDownLocked) {
+                    this.camera.rotation.order = 'YXZ';
+                    this.camera.rotation.y -= deltaX * 0.006;
+                    this.camera.rotation.x -= deltaY * 0.006;
+                    
+                    // 限制垂直角度，避免翻轉
+                    this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
+                }
+                
+                // 左鍵：平移相機
+                if (isLeftButtonDownLocked) {
+                    // 更新相機矩陣以獲取正確的方向
+                    this.camera.updateMatrixWorld();
+                    
+                    // 計算相機的右方向和上方向
+                    const right = new THREE.Vector3();
+                    right.setFromMatrixColumn(this.camera.matrixWorld, 0);
+                    right.normalize();
+                    
+                    const up = new THREE.Vector3();
+                    up.setFromMatrixColumn(this.camera.matrixWorld, 1);
+                    up.normalize();
+                    
+                    // 計算平移速度（使用與非鎖定模式相同的計算方式）
+                    const rect = this.renderer.domElement.getBoundingClientRect();
+                    const height = rect.height;
+                    const distance = this.camera.position.length();
+                    const fov = this.camera.fov * (Math.PI / 180);
+                    const visibleHeight = 2 * Math.tan(fov / 2) * distance;
+                    const panSpeed = visibleHeight / height;
+                    
+                    // 使用 movementX/Y 來計算平移（轉換為像素單位）
+                    const panX = right.clone().multiplyScalar(-deltaX * panSpeed);
+                    const panY = up.clone().multiplyScalar(deltaY * panSpeed);
+                    
+                    // 平移相機
+                    this.camera.position.add(panX);
+                    this.camera.position.add(panY);
+                }
+            }
+        });
+    }
+
+    // 設置滑鼠鎖定功能
+    setupMouseLock() {
+        this.mouseLockButton = document.getElementById('lockMouseBtn');
+        if (!this.mouseLockButton) {
+            console.warn('找不到鎖定滑鼠按鈕');
+            return;
+        }
+
+        // 更新按鈕文字
+        this.updateLockButtonText();
+
+        // 點擊按鈕切換鎖定狀態
+        this.mouseLockButton.addEventListener('click', () => {
+            this.toggleMouseLock();
+        });
+
+        // 監聽 Pointer Lock 狀態變化
+        document.addEventListener('pointerlockchange', () => {
+            this.isMouseLocked = document.pointerLockElement === this.renderer.domElement;
+            this.updateLockButtonText();
+        });
+
+        // 監聽 Pointer Lock 錯誤
+        document.addEventListener('pointerlockerror', () => {
+            console.error('Pointer Lock 失敗');
+            alert('無法鎖定滑鼠，請確認瀏覽器允許 Pointer Lock 功能');
+            this.isMouseLocked = false;
+            this.updateLockButtonText();
+        });
+    }
+
+    // 切換滑鼠鎖定
+    toggleMouseLock() {
+        if (this.isMouseLocked) {
+            // 解鎖
+            document.exitPointerLock();
+        } else {
+            // 鎖定（需要用戶互動，所以通過點擊按鈕觸發）
+            this.renderer.domElement.requestPointerLock();
+        }
+    }
+
+    // 更新鎖定按鈕文字
+    updateLockButtonText() {
+        if (this.mouseLockButton) {
+            this.mouseLockButton.textContent = this.isMouseLocked ? '解鎖滑鼠' : '鎖定滑鼠';
+            if (this.isMouseLocked) {
+                this.mouseLockButton.classList.add('active');
+            } else {
+                this.mouseLockButton.classList.remove('active');
+            }
+        }
     }
 
     // 動畫循環
