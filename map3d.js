@@ -504,9 +504,25 @@ class Map3D {
     createMarkerSprite(text) {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
-        // 增大 canvas 尺寸以容納更大的文字
-        canvas.width = 384;
-        canvas.height = 96;
+        
+        // 設定字體大小
+        const fontSize = 48;
+        context.font = 'bold ' + fontSize + 'px Microsoft JhengHei';
+        
+        // 測量文字寬度
+        const textMetrics = context.measureText(text);
+        const textWidth = textMetrics.width;
+        
+        // 根據文字長度動態調整 canvas 寬度（加上左右內邊距）
+        const padding = 40; // 左右內邊距
+        const minWidth = 200; // 最小寬度
+        canvas.width = Math.max(textWidth + padding * 2, minWidth);
+        canvas.height = 144; // 固定高度
+        
+        // 重新設定字體（因為 canvas 尺寸改變後需要重新設定）
+        context.font = 'bold ' + fontSize + 'px Microsoft JhengHei';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
         
         // 繪製背景
         context.fillStyle = 'rgba(102, 126, 234, 0.9)';
@@ -514,21 +530,21 @@ class Map3D {
         
         // 繪製邊框
         context.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        context.lineWidth = 3;
+        context.lineWidth = 4;
         context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
         
-        // 繪製文字（放大字體）
+        // 繪製文字
         context.fillStyle = 'white';
-        context.font = 'bold 32px Microsoft JhengHei';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
         context.fillText(text, canvas.width / 2, canvas.height / 2);
 
         const texture = new THREE.CanvasTexture(canvas);
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
         const sprite = new THREE.Sprite(spriteMaterial);
-        // 相應增大 sprite 縮放以匹配更大的文字
-        sprite.scale.set(22, 6, 1);
+        
+        // 根據 canvas 寬度動態調整 sprite 縮放（保持高度不變）
+        const baseScale = 9; // 基礎高度縮放
+        const widthScale = (canvas.width / canvas.height) * baseScale; // 根據寬高比調整寬度縮放
+        sprite.scale.set(widthScale, baseScale, 1);
         
         return sprite;
     }
