@@ -2,25 +2,57 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    outline: none !important;
+    border: none;
+}
+
+*:focus {
+    outline: none !important;
+    border: none !important;
+}
+
+html {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border: none !important;
+    outline: none !important;
 }
 
 body {
     font-family: 'Microsoft JhengHei', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #1a1a1a !important;
+    width: 100%;
+    height: 100%;
     min-height: 100vh;
-    padding: 20px;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden;
+    border: none !important;
+    outline: none !important;
 }
 
 .container {
-    max-width: 1800px;
-    margin: 0 auto;
-    background: white;
-    border-radius: 15px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
     overflow: hidden;
-    height: calc(100vh - 40px);
+    height: 100vh !important;
     display: flex;
     flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
 }
 
 header {
@@ -571,6 +603,34 @@ header h1 {
     font-size: 24px;
     margin-bottom: 15px;
     padding-right: 40px;
+}
+
+.photo-info-description {
+    color: #666 !important;
+    line-height: 1.8;
+    font-size: 15px;
+    margin-bottom: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    min-height: 20px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.photo-info-description:not(:empty) {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* 確保當有內容時顯示 */
+#photoInfoDescription[style*="display: block"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 #photoInfoImageContainer {

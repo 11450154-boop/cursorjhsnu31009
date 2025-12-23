@@ -27,7 +27,11 @@ class PhotoMarkerManager {
             '舊北樓.jpg',
             '西樓.jpg',
             '體育教學館.jpg',
-            '體育館.jpg'
+            '體育館.jpg',
+            '垃圾場.jpeg',
+            '天下為公.jpeg',
+            '藍天之子.jpeg',
+            '附中仙人掌.jpeg'
         ];
 
         knownImages.forEach(imageName => {

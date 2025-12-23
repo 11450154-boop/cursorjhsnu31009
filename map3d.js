@@ -561,8 +561,13 @@ class Map3D {
 
     // 圖片標誌點擊處理
     onPhotoMarkerClick(markerId) {
+        console.log('onPhotoMarkerClick 被調用，markerId:', markerId);
         const marker = photoMarkerManager.getMarker(markerId);
-        if (!marker) return;
+        if (!marker) {
+            console.warn('找不到標誌，markerId:', markerId);
+            return;
+        }
+        console.log('找到標誌:', marker);
 
         this.showPhotoInfoPanel(marker);
         this.currentPhotoMarkerId = markerId;
@@ -575,11 +580,21 @@ class Map3D {
     }
 
     // 顯示圖片資訊面板
-    showPhotoInfoPanel(marker) {
+    async showPhotoInfoPanel(marker) {
+        console.log('showPhotoInfoPanel 被調用，marker:', marker);
         const panel = document.getElementById('photoInfoPanel');
         const title = document.getElementById('photoInfoTitle');
         const image = document.getElementById('photoInfoImage');
         const imageContainer = document.getElementById('photoInfoImageContainer');
+        const descriptionElement = document.getElementById('photoInfoDescription');
+
+        console.log('面板元素檢查:', {
+            panel: !!panel,
+            title: !!title,
+            image: !!image,
+            imageContainer: !!imageContainer,
+            descriptionElement: !!descriptionElement
+        });
 
         if (!panel || !title || !image || !imageContainer) {
             console.warn('資訊面板元素不存在');
@@ -587,6 +602,67 @@ class Map3D {
         }
 
         title.textContent = marker.name.replace(/\.(jpg|jpeg|png)$/i, '');
+        console.log('標題已設置:', title.textContent);
+
+        // 載入描述文字
+        if (descriptionElement) {
+            // 根據圖片檔名生成對應的文字檔路徑
+            const imageFileName = marker.name || marker.imagePath;
+            const textFileName = imageFileName.replace(/\.(jpg|jpeg|png)$/i, '.txt');
+            const textFilePath = 'descriptions/' + textFileName;
+            
+            console.log('嘗試載入描述文字:', textFilePath, 'marker:', marker);
+            
+            // 先清空描述區域
+            descriptionElement.textContent = '';
+            descriptionElement.style.display = 'none';
+            descriptionElement.style.visibility = 'hidden';
+            
+            // 嘗試載入文字檔
+            try {
+                const response = await fetch(textFilePath);
+                console.log('描述文字載入回應:', response.status, response.ok, response.statusText);
+                
+                if (response.ok) {
+                    const text = await response.text();
+                    console.log('描述文字內容 (原始):', JSON.stringify(text));
+                    console.log('描述文字內容 (trim後):', JSON.stringify(text.trim()));
+                    console.log('描述文字長度:', text.length, 'trim後長度:', text.trim().length);
+                    
+                    if (text && text.trim()) {
+                        // 將文字內容顯示在描述區域（保留換行）
+                        descriptionElement.textContent = text.trim();
+                        descriptionElement.style.display = 'block';
+                        descriptionElement.style.visibility = 'visible';
+                        descriptionElement.style.opacity = '1';
+                        console.log('描述文字已設置，元素內容:', descriptionElement.textContent);
+                        console.log('描述元素樣式:', {
+                            display: descriptionElement.style.display,
+                            visibility: descriptionElement.style.visibility,
+                            opacity: descriptionElement.style.opacity,
+                            innerHTML: descriptionElement.innerHTML,
+                            textContent: descriptionElement.textContent
+                        });
+                    } else {
+                        console.log('描述文字為空或只有空白');
+                        descriptionElement.style.display = 'none';
+                    }
+                } else {
+                    // 檔案不存在，隱藏描述區域
+                    console.warn('描述文字檔案不存在或無法讀取:', textFilePath, '狀態碼:', response.status, response.statusText);
+                    descriptionElement.style.display = 'none';
+                }
+            } catch (error) {
+                // 載入失敗，隱藏描述區域
+                console.error('無法載入描述文字 (錯誤詳情):', textFilePath, error);
+                console.error('錯誤類型:', error.name, '錯誤訊息:', error.message);
+                descriptionElement.style.display = 'none';
+            }
+        } else {
+            console.error('找不到描述元素 photoInfoDescription，檢查 DOM');
+            const testElement = document.getElementById('photoInfoDescription');
+            console.log('直接查詢結果:', testElement);
+        }
 
         // 載入圖片（確保路徑包含 images/ 前綴）
         let imagePath = marker.imagePath;
@@ -602,6 +678,11 @@ class Map3D {
             imageContainer.style.display = 'none';
         };
 
+        // 等待描述文字載入完成後再顯示面板
+        // 如果描述元素存在，等待載入完成；否則直接顯示
+        if (descriptionElement) {
+            // 描述文字載入已在上面完成，這裡直接顯示面板
+        }
         panel.classList.remove('hidden');
     }
 
