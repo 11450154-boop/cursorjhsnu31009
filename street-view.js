@@ -350,6 +350,7 @@ class StreetViewController {
 // 全域街景控制器實例
 let streetViewController = null;
 let streetViewSetup = false;
+window.streetViewController = null; // 設置為全域變數
 
 function setupStreetView() {
     // 避免重複設置
@@ -362,6 +363,7 @@ function setupStreetView() {
     
     console.log('設置街景模式...');
     streetViewController = new StreetViewController(window.map3D);
+    window.streetViewController = streetViewController; // 設置為全域變數
 
     const btn = document.getElementById('streetViewBtn');
     if (btn) {
