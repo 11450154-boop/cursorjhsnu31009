@@ -7,6 +7,33 @@ class PhotoMarkerManager {
         this.scanImages();
     }
 
+    // 預設地標座標資料（永久儲存）
+    getDefaultPositions() {
+        return {
+            '中正樓.jpg': { x: -8.4, y: 17.3, z: 66.0 },
+            '中興堂.jpg': { x: 61.1, y: 10.3, z: 103.0 },
+            '南樓.jpg': { x: -7.5, y: 21.6, z: 106.4 },
+            '司令台.jpg': { x: -13.4, y: 18.0, z: -83.2 },
+            '國中部.jpg': { x: -86.3, y: 20.6, z: 22.3 },
+            '圖書館.jpg': { x: -40.8, y: 20.6, z: -29.6 },
+            '技藝館.jpg': { x: 63.7, y: 21.9, z: 65.5 },
+            '操場.jpg': { x: 29.6, y: 0.6, z: -88.1 },
+            '新北樓.jpg': { x: -6.3, y: 21.6, z: 20.8 },
+            '東樓.jpg': { x: 32.0, y: 8.7, z: 81.2 },
+            '校門.jpg': { x: -11.7, y: 10.3, z: 130.2 },
+            '樂教館.jpg': { x: -29.4, y: 21.9, z: -116.0 },
+            '淡水信義線第二出口.jpeg': { x: 58.5, y: 7.7, z: 128.3 },
+            '舊北樓.jpg': { x: -3.8, y: 10.3, z: -5.4 },
+            '西樓.jpg': { x: -47.7, y: 8.6, z: 78.1 },
+            '體育教學館.jpg': { x: -84.1, y: 15.4, z: -36.3 },
+            '體育館.jpg': { x: -81.4, y: 21.6, z: 100.6 },
+            '垃圾場.jpeg': { x: 68.1, y: 0.0, z: 24.7 },
+            '天下為公.jpeg': { x: -28.2, y: 0.0, z: 114.2 },
+            '藍天之子.jpeg': { x: -42.7, y: 0.0, z: 114.6 },
+            '附中仙人掌.jpeg': { x: 12.7, y: 0.0, z: 131.9 }
+        };
+    }
+
     // 掃描圖片檔案
     scanImages() {
         // 定義已知的圖片檔案列表（因為瀏覽器無法直接掃描資料夾）
@@ -34,6 +61,9 @@ class PhotoMarkerManager {
             '附中仙人掌.jpeg'
         ];
 
+        // 取得預設座標
+        const defaultPositions = this.getDefaultPositions();
+
         knownImages.forEach(imageName => {
             // 檢查是否已存在（根據名稱匹配）
             const existing = this.markers.find(m => m.name === imageName);
@@ -42,7 +72,7 @@ class PhotoMarkerManager {
                     id: this.generateId(imageName),
                     name: imageName,
                     imagePath: imageName,
-                    position: null // 初始位置為 null，不顯示在地圖上
+                    position: defaultPositions[imageName] || null // 使用預設座標，如果沒有則為 null
                 };
                 this.markers.push(marker);
             } else {
@@ -51,6 +81,11 @@ class PhotoMarkerManager {
                 if (existing.id !== newId) {
                     console.log(`更新標誌 ID: ${existing.name} 從 ${existing.id} 改為 ${newId}`);
                     existing.id = newId;
+                }
+                // 如果地標沒有座標，使用預設座標
+                if (!existing.position && defaultPositions[imageName]) {
+                    existing.position = defaultPositions[imageName];
+                    console.log(`為 ${imageName} 設定預設座標`);
                 }
             }
         });
@@ -130,14 +165,21 @@ class PhotoMarkerManager {
     loadFromStorage() {
         try {
             const saved = localStorage.getItem('photoMarkers');
+            const defaultPositions = this.getDefaultPositions();
+            
             if (saved) {
                 const data = JSON.parse(saved);
-                // 遷移舊的 ID 到新的 ID 格式
+                // 遷移舊的 ID 到新的 ID 格式，並確保有預設座標
                 this.markers = data.map(marker => {
                     const newId = this.generateId(marker.name);
                     if (marker.id !== newId) {
                         console.log(`遷移標誌 ID: ${marker.name} 從 ${marker.id} 改為 ${newId}`);
                         marker.id = newId;
+                    }
+                    // 如果沒有座標，使用預設座標
+                    if (!marker.position && defaultPositions[marker.name]) {
+                        marker.position = defaultPositions[marker.name];
+                        console.log(`為 ${marker.name} 設定預設座標`);
                     }
                     return marker;
                 });

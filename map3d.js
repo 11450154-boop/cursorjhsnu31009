@@ -217,18 +217,16 @@ class Map3D {
             
             console.log(`${name} 處理完成，原始位置:`, originalPosition, '旋轉後位置:', model.position);
             
-            // 為建築物添加黑色邊緣線（在所有變換完成並添加到場景之後）
-            if (type === 'building' || type === 'buildingName') {
-                // 使用 setTimeout 確保模型完全載入後再添加邊緣線
-                setTimeout(() => {
-                    model.traverse((child) => {
-                        if (child.isMesh) {
-                            console.log('為建築物添加邊緣線:', child, '類型:', type);
-                            this.addEdgeLines(child);
-                        }
-                    });
-                }, 100);
-            }
+            // 為所有3D模型添加黑色邊緣線（在所有變換完成並添加到場景之後）
+            // 使用 setTimeout 確保模型完全載入後再添加邊緣線
+            setTimeout(() => {
+                model.traverse((child) => {
+                    if (child.isMesh) {
+                        console.log('為模型添加邊緣線:', child, '類型:', type);
+                        this.addEdgeLines(child);
+                    }
+                });
+            }, 100);
         });
     }
     
@@ -524,18 +522,29 @@ class Map3D {
         context.textAlign = 'center';
         context.textBaseline = 'middle';
         
-        // 繪製背景
-        context.fillStyle = 'rgba(102, 126, 234, 0.9)';
+        // 繪製背景（使用更深的背景色以增加對比度）
+        context.fillStyle = 'rgba(30, 30, 40, 0.95)';
         context.fillRect(0, 0, canvas.width, canvas.height);
         
-        // 繪製邊框
-        context.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        context.lineWidth = 4;
-        context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+        // 繪製邊框（使用亮色邊框）
+        context.strokeStyle = 'rgba(255, 215, 0, 0.9)';
+        context.lineWidth = 5;
+        context.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
         
-        // 繪製文字
-        context.fillStyle = 'white';
-        context.fillText(text, canvas.width / 2, canvas.height / 2);
+        // 繪製文字（使用亮黃色，並添加黑色描邊使其更顯眼）
+        const textX = canvas.width / 2;
+        const textY = canvas.height / 2;
+        
+        // 先繪製文字描邊（黑色）
+        context.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        context.lineWidth = 6;
+        context.lineJoin = 'round';
+        context.miterLimit = 2;
+        context.strokeText(text, textX, textY);
+        
+        // 再繪製文字主體（亮黃色）
+        context.fillStyle = '#FFD700'; // 金色/亮黃色
+        context.fillText(text, textX, textY);
 
         const texture = new THREE.CanvasTexture(canvas);
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
