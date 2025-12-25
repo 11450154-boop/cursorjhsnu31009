@@ -380,17 +380,37 @@ function initPhotoMarkerEditor() {
         return;
     }
 
-    // 檢查按鈕是否存在
-    const setupBtn = document.getElementById('setupMarkerPosBtn');
+    // 檢查按鈕是否存在（如果不存在，創建一個）
+    let setupBtn = document.getElementById('setupMarkerPosBtn');
     if (!setupBtn) {
-        console.warn(`找不到 setupMarkerPosBtn 按鈕，延遲初始化 (嘗試 ${initAttempts}/${maxInitAttempts})`);
-        isInitializing = false;
-        if (initAttempts < maxInitAttempts) {
-            setTimeout(initPhotoMarkerEditor, 100);
+        // 嘗試創建按鈕
+        const controls = document.querySelector('.controls');
+        if (controls) {
+            setupBtn = document.createElement('button');
+            setupBtn.id = 'setupMarkerPosBtn';
+            setupBtn.className = 'btn';
+            setupBtn.textContent = '設定標誌位置';
+            controls.insertBefore(setupBtn, controls.firstChild);
+            console.log('已創建 setupMarkerPosBtn 按鈕');
         } else {
-            console.error('初始化失敗：超過最大嘗試次數');
+            console.warn(`找不到 setupMarkerPosBtn 按鈕和 controls 區域，延遲初始化 (嘗試 ${initAttempts}/${maxInitAttempts})`);
+            isInitializing = false;
+            if (initAttempts < maxInitAttempts) {
+                setTimeout(initPhotoMarkerEditor, 100);
+            } else {
+                console.error('初始化失敗：超過最大嘗試次數');
+                // 即使沒有按鈕，也嘗試初始化編輯器（可以通過其他方式打開）
+                isInitializing = false;
+                try {
+                    photoMarkerEditor = new PhotoMarkerEditor();
+                    window.photoMarkerEditor = photoMarkerEditor;
+                    console.log('PhotoMarkerEditor 初始化完成（無按鈕模式）');
+                } catch (error) {
+                    console.error('PhotoMarkerEditor 初始化失敗:', error);
+                }
+            }
+            return;
         }
-        return;
     }
 
     // 檢查 photoMarkerManager 是否已初始化

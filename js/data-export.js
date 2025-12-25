@@ -135,6 +135,11 @@ class DataExport {
                     }
                 });
 
+                // 強制重新掃描，確保所有地標都被掃描到
+                if (window.photoMarkerManager && window.photoMarkerManager.forceRescan) {
+                    window.photoMarkerManager.forceRescan();
+                }
+
                 // 重新載入標誌到地圖
                 if (window.map3D) {
                     // 清除現有標誌
@@ -145,7 +150,22 @@ class DataExport {
                     window.map3D.loadPhotoMarkers();
                 }
 
-                alert(`已成功匯入 ${importedCount} 個標誌的位置資料`);
+                // 檢查是否有地標沒有座標
+                const allMarkers = window.photoMarkerManager.getAllMarkers();
+                const markersWithoutPosition = allMarkers.filter(m => !m.position);
+                
+                if (markersWithoutPosition.length > 0) {
+                    // 如果有地標沒有座標，自動打開標誌位置編輯器
+                    const confirmMsg = `已成功匯入 ${importedCount} 個標誌的位置資料。\n\n發現 ${markersWithoutPosition.length} 個地標尚未設定座標，是否要現在設定？`;
+                    if (confirm(confirmMsg)) {
+                        // 等待編輯器初始化
+                        this.waitForEditorAndOpen(markersWithoutPosition);
+                    } else {
+                        alert(`已成功匯入 ${importedCount} 個標誌的位置資料`);
+                    }
+                } else {
+                    alert(`已成功匯入 ${importedCount} 個標誌的位置資料`);
+                }
             } catch (error) {
                 console.error('匯入失敗:', error);
                 alert('匯入失敗：' + error.message);
@@ -166,6 +186,30 @@ class DataExport {
             return true;
         }
         return false;
+    }
+
+    // 等待編輯器初始化並打開
+    waitForEditorAndOpen(markersWithoutPosition, attempts = 0, maxAttempts = 50) {
+        if (window.photoMarkerEditor) {
+            // 編輯器已初始化，打開它
+            window.photoMarkerEditor.openEditor();
+            // 自動選擇第一個沒有座標的地標
+            if (markersWithoutPosition.length > 0) {
+                setTimeout(() => {
+                    window.photoMarkerEditor.selectMarker(markersWithoutPosition[0].id);
+                    // 提示用戶可以點選座標
+                    window.photoMarkerEditor.showMessage('請點擊「在地圖上選擇位置」按鈕來設定座標', 'info');
+                }, 100);
+            }
+        } else if (attempts < maxAttempts) {
+            // 編輯器尚未初始化，等待後重試
+            setTimeout(() => {
+                this.waitForEditorAndOpen(markersWithoutPosition, attempts + 1, maxAttempts);
+            }, 100);
+        } else {
+            // 超過最大嘗試次數，顯示錯誤訊息
+            alert('標誌位置編輯器初始化超時，請手動點擊「設定標誌位置」按鈕來設定座標');
+        }
     }
 }
 

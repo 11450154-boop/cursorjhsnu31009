@@ -148,6 +148,17 @@ class PhotoMarkerManager {
             this.markers = [];
         }
     }
+
+    // 強制重新掃描（清除快取並重新掃描）
+    forceRescan() {
+        console.log('強制重新掃描圖片標誌...');
+        // 先清除現有標誌
+        this.markers = [];
+        // 重新掃描
+        this.scanImages();
+        console.log(`重新掃描完成，共 ${this.markers.length} 個標誌`);
+        return this.markers.length;
+    }
 }
 
 // 建立全域標誌管理器實例
