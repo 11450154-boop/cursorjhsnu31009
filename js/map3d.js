@@ -7,7 +7,7 @@ class Map3D {
         this.renderer = null;
         this.controls = null;
         this.mapModel = null;
-        this.mapModels = {}; // 儲存多個模型：{ building: obj, ground: obj, buildingName: obj }
+        this.mapModels = {}; // 儲存多個模型：{ building: obj, ground: obj }
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
         // 縮放速度係數（數字越大縮放越快）
@@ -89,8 +89,7 @@ class Map3D {
     loadAllModels() {
         const modelsToLoad = [
             { path: 'models/building.obj', type: 'building', name: '建築物' },
-            { path: 'models/ground.obj', type: 'ground', name: '地板' },
-            { path: 'models/building name.obj', type: 'buildingName', name: '建築名稱' }
+            { path: 'models/ground.obj', type: 'ground', name: '地板' }
         ];
         
         let loadedCount = 0;
@@ -191,7 +190,7 @@ class Map3D {
             console.log(`${name} 處理完成，原始位置:`, originalPosition, '旋轉後位置:', model.position);
             
             // 為建築物添加黑色邊緣線（在所有變換完成並添加到場景之後）
-            if (type === 'building' || type === 'buildingName') {
+            if (type === 'building') {
                 // 使用 setTimeout 確保模型完全載入後再添加邊緣線
                 setTimeout(() => {
                     model.traverse((child) => {
@@ -309,24 +308,15 @@ class Map3D {
     // 設定街景模式的模型顯示狀態
     setStreetViewMode(isStreetView) {
         this.isStreetViewMode = isStreetView;
-        if (isStreetView) {
-            // 街景模式：只顯示建築物和地板
-            this.setModelVisibility('building', true);
-            this.setModelVisibility('ground', true);
-            this.setModelVisibility('buildingName', false);
-        } else {
-            // 正常模式：顯示所有模型
-            this.setModelVisibility('building', true);
-            this.setModelVisibility('ground', true);
-            this.setModelVisibility('buildingName', true);
-        }
+        // 街景模式和正常模式都顯示建築物和地板
+        this.setModelVisibility('building', true);
+        this.setModelVisibility('ground', true);
     }
     
     // 處理模型載入錯誤，嘗試下一個檔案
     handleModelLoadError(failedPath, currentIndex) {
         const defaultModels = [
             'models/building.obj',
-            'models/building name.obj',
             'models/ground.obj'
         ];
         
@@ -358,7 +348,6 @@ class Map3D {
         // 預設嘗試載入的檔案（按優先順序）
         const defaultModels = [
             'models/building.obj',      // 主要建築模型
-            'models/building name.obj', // 建築名稱模型
             'models/ground.obj'         // 地面模型
         ];
         

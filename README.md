@@ -28,8 +28,6 @@ map/
 ├── models/
 │   ├── building.obj    # 建築物模型
 │   ├── building.mtl    # 建築物材質
-│   ├── building name.obj # 建築名稱模型
-│   ├── building name.mtl # 建築名稱材質
 │   ├── ground.obj      # 地面模型
 │   └── ground.mtl      # 地面材質
 ├── images/             # 地標圖片

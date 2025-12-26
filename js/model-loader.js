@@ -166,7 +166,7 @@ class ModelLoader {
                 console.error('載入 OBJ 模型失敗:', error);
                 // 如果有 map3D 實例且是預設檔案，嘗試回退
                 if (this.map3D && this.map3D.handleModelLoadError) {
-                    const defaultModels = ['models/building.obj', 'models/building name.obj', 'models/ground.obj'];
+                    const defaultModels = ['models/building.obj', 'models/ground.obj'];
                     const currentIndex = defaultModels.indexOf(filePath);
                     if (currentIndex >= 0 && this.currentFallbackIndex !== undefined) {
                         // 使用儲存的回退索引

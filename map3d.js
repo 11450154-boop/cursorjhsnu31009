@@ -7,7 +7,7 @@ class Map3D {
         this.renderer = null;
         this.controls = null;
         this.mapModel = null;
-        this.mapModels = {}; // 儲存多個模型：{ building: obj, ground: obj, buildingName: obj }
+        this.mapModels = {}; // 儲存多個模型：{ building: obj, ground: obj }
         this.photoMarkers = []; // 儲存圖片標誌物件
         this.currentPhotoMarkerId = null; // 當前選中的圖片標誌 ID
         this.isSelectingPosition = false; // 是否正在選擇位置
@@ -116,8 +116,7 @@ class Map3D {
     loadAllModels() {
         const modelsToLoad = [
             { path: 'models/building.obj', type: 'building', name: '建築物' },
-            { path: 'models/ground.obj', type: 'ground', name: '地板' },
-            { path: 'models/building name.obj', type: 'buildingName', name: '建築名稱' }
+            { path: 'models/ground.obj', type: 'ground', name: '地板' }
         ];
         
         let loadedCount = 0;
@@ -215,14 +214,69 @@ class Map3D {
             this.mapModels[type] = model;
             this.scene.add(model);
             
-            console.log(`${name} 處理完成，原始位置:`, originalPosition, '旋轉後位置:', model.position);
+            // 調試：計算模型的邊界框和網格數量
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            let meshCount = 0;
+            let vertexCount = 0;
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    meshCount++;
+                    if (child.geometry && child.geometry.attributes && child.geometry.attributes.position) {
+                        vertexCount += child.geometry.attributes.position.count;
+                    }
+                }
+            });
+            
+            console.log(`${name} 處理完成：`, {
+                原始位置: originalPosition,
+                旋轉後位置: model.position,
+                邊界框: {
+                    最小: box.min,
+                    最大: box.max,
+                    尺寸: size,
+                    中心: box.getCenter(new THREE.Vector3())
+                },
+                網格數量: meshCount,
+                頂點數量: vertexCount
+            });
             
             // 為所有3D模型添加黑色邊緣線（在所有變換完成並添加到場景之後）
             // 使用 setTimeout 確保模型完全載入後再添加邊緣線
             setTimeout(() => {
+                let meshIndex = 0;
                 model.traverse((child) => {
                     if (child.isMesh) {
-                        console.log('為模型添加邊緣線:', child, '類型:', type);
+                        meshIndex++;
+                        // 為每個網格添加唯一標識
+                        if (!child.userData) child.userData = {};
+                        child.userData.meshIndex = meshIndex;
+                        child.userData.modelType = type;
+                        child.userData.meshName = child.name || `網格_${meshIndex}`;
+                        
+                        // 計算這個網格的邊界框
+                        const meshBox = new THREE.Box3().setFromObject(child);
+                        const meshSize = meshBox.getSize(new THREE.Vector3());
+                        const meshCenter = meshBox.getCenter(new THREE.Vector3());
+                        
+                        let vertexCount = 0;
+                        if (child.geometry && child.geometry.attributes && child.geometry.attributes.position) {
+                            vertexCount = child.geometry.attributes.position.count;
+                        }
+                        
+                        console.log(`為模型添加邊緣線 [${type}] 網格 #${meshIndex}:`, {
+                            名稱: child.userData.meshName,
+                            位置: child.position,
+                            邊界框: {
+                                最小: meshBox.min,
+                                最大: meshBox.max,
+                                尺寸: meshSize,
+                                中心: meshCenter
+                            },
+                            頂點數: vertexCount,
+                            物件: child
+                        });
+                        
                         this.addEdgeLines(child);
                     }
                 });
@@ -334,24 +388,15 @@ class Map3D {
     // 設定街景模式的模型顯示狀態
     setStreetViewMode(isStreetView) {
         this.isStreetViewMode = isStreetView;
-        if (isStreetView) {
-            // 街景模式：只顯示建築物和地板
-            this.setModelVisibility('building', true);
-            this.setModelVisibility('ground', true);
-            this.setModelVisibility('buildingName', false);
-        } else {
-            // 正常模式：顯示所有模型
-            this.setModelVisibility('building', true);
-            this.setModelVisibility('ground', true);
-            this.setModelVisibility('buildingName', true);
-        }
+        // 街景模式和正常模式都顯示建築物和地板
+        this.setModelVisibility('building', true);
+        this.setModelVisibility('ground', true);
     }
     
     // 處理模型載入錯誤，嘗試下一個檔案
     handleModelLoadError(failedPath, currentIndex) {
         const defaultModels = [
             'building.obj',
-            'building name.obj',
             'ground.obj'
         ];
         
@@ -383,7 +428,6 @@ class Map3D {
         // 預設嘗試載入的檔案（按優先順序）
         const defaultModels = [
             'building.obj',      // 主要建築模型
-            'building name.obj', // 建築名稱模型
             'ground.obj'         // 地面模型
         ];
         
@@ -417,6 +461,27 @@ class Map3D {
     onModelLoaded() {
         // 模型載入完成後可以執行的操作
         console.log('地圖模型載入完成');
+        
+        // 調試：列出場景中所有模型物件
+        console.log('=== 場景中的模型物件 ===');
+        this.scene.traverse((object) => {
+            if (object.userData && object.userData.type === 'map') {
+                const box = new THREE.Box3().setFromObject(object);
+                const size = box.getSize(new THREE.Vector3());
+                console.log(`模型類型: ${object.userData.modelType || '未知'}`, {
+                    物件: object,
+                    位置: object.position,
+                    邊界框: {
+                        最小: box.min,
+                        最大: box.max,
+                        尺寸: size
+                    },
+                    子物件數量: object.children.length
+                });
+            }
+        });
+        console.log('=== 模型列表結束 ===');
+        
         // 載入所有圖片標誌
         this.loadPhotoMarkers();
     }
@@ -1256,6 +1321,148 @@ function initMap() {
     map3D = new Map3D('canvas-container');
     window.map3D = map3D; // 設置為全域變數，供其他模組使用
     console.log('map3D 初始化完成，已設置為 window.map3D');
+    
+    // 添加全局調試函數
+    window.inspectModels = function() {
+        if (!map3D) {
+            console.error('map3D 尚未初始化');
+            return;
+        }
+        
+        console.log('=== 模型檢查 ===');
+        console.log('mapModels:', map3D.mapModels);
+        
+        Object.keys(map3D.mapModels).forEach(type => {
+            const model = map3D.mapModels[type];
+            if (model) {
+                const box = new THREE.Box3().setFromObject(model);
+                const size = box.getSize(new THREE.Vector3());
+                const center = box.getCenter(new THREE.Vector3());
+                
+                let meshCount = 0;
+                let totalVertices = 0;
+                const meshDetails = [];
+                
+                model.traverse((child) => {
+                    if (child.isMesh) {
+                        meshCount++;
+                        const meshBox = new THREE.Box3().setFromObject(child);
+                        const meshSize = meshBox.getSize(new THREE.Vector3());
+                        const meshCenter = meshBox.getCenter(new THREE.Vector3());
+                        
+                        let vertexCount = 0;
+                        if (child.geometry && child.geometry.attributes && child.geometry.attributes.position) {
+                            vertexCount = child.geometry.attributes.position.count;
+                        }
+                        
+                        const meshInfo = {
+                            索引: child.userData.meshIndex || meshCount,
+                            名稱: child.name || child.userData.meshName || `網格_${meshCount}`,
+                            位置: child.position,
+                            邊界框: {
+                                最小: meshBox.min,
+                                最大: meshBox.max,
+                                尺寸: meshSize,
+                                中心: meshCenter
+                            },
+                            頂點數: vertexCount,
+                            物件: child
+                        };
+                        
+                        meshDetails.push(meshInfo);
+                        totalVertices += vertexCount;
+                    }
+                });
+                
+                console.log(`\n模型類型: ${type}`, {
+                    位置: model.position,
+                    邊界框: {
+                        最小: box.min,
+                        最大: box.max,
+                        尺寸: size,
+                        中心: center
+                    },
+                    網格數量: meshCount,
+                    總頂點數: totalVertices,
+                    網格詳細資訊: meshDetails,
+                    物件: model
+                });
+            }
+        });
+        
+        console.log('\n提示：');
+        console.log('  - 輸入 inspectModels() 可以隨時檢查模型');
+        console.log('  - 輸入 hideMesh(type, index) 可以隱藏特定網格，例如: hideMesh("ground", 3)');
+        console.log('  - 輸入 showMesh(type, index) 可以顯示特定網格');
+        console.log('  - 輸入 toggleMesh(type, index) 可以切換網格的顯示/隱藏');
+        console.log('=== 檢查結束 ===');
+    };
+    
+    // 隱藏特定網格
+    window.hideMesh = function(type, meshIndex) {
+        if (!map3D || !map3D.mapModels[type]) {
+            console.error(`找不到模型類型: ${type}`);
+            return;
+        }
+        
+        const model = map3D.mapModels[type];
+        let found = false;
+        model.traverse((child) => {
+            if (child.isMesh && (child.userData.meshIndex === meshIndex || !meshIndex)) {
+                child.visible = false;
+                found = true;
+                console.log(`已隱藏 ${type} 模型的網格 #${child.userData.meshIndex || '未知'}`);
+            }
+        });
+        
+        if (!found) {
+            console.warn(`找不到 ${type} 模型的網格 #${meshIndex}`);
+        }
+    };
+    
+    // 顯示特定網格
+    window.showMesh = function(type, meshIndex) {
+        if (!map3D || !map3D.mapModels[type]) {
+            console.error(`找不到模型類型: ${type}`);
+            return;
+        }
+        
+        const model = map3D.mapModels[type];
+        let found = false;
+        model.traverse((child) => {
+            if (child.isMesh && (child.userData.meshIndex === meshIndex || !meshIndex)) {
+                child.visible = true;
+                found = true;
+                console.log(`已顯示 ${type} 模型的網格 #${child.userData.meshIndex || '未知'}`);
+            }
+        });
+        
+        if (!found) {
+            console.warn(`找不到 ${type} 模型的網格 #${meshIndex}`);
+        }
+    };
+    
+    // 切換網格顯示/隱藏
+    window.toggleMesh = function(type, meshIndex) {
+        if (!map3D || !map3D.mapModels[type]) {
+            console.error(`找不到模型類型: ${type}`);
+            return;
+        }
+        
+        const model = map3D.mapModels[type];
+        let found = false;
+        model.traverse((child) => {
+            if (child.isMesh && child.userData.meshIndex === meshIndex) {
+                child.visible = !child.visible;
+                found = true;
+                console.log(`${child.visible ? '顯示' : '隱藏'} ${type} 模型的網格 #${meshIndex}`);
+            }
+        });
+        
+        if (!found) {
+            console.warn(`找不到 ${type} 模型的網格 #${meshIndex}`);
+        }
+    };
     
     // 觸發自訂事件，通知其他模組 map3D 已準備好
     window.dispatchEvent(new CustomEvent('map3DReady', { detail: map3D }));
