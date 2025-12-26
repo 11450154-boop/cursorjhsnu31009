@@ -1025,11 +1025,14 @@ class Map3D {
             // 如果正在選擇位置模式，優先處理位置選擇
             if (this.isSelectingPosition) {
                 // 在選擇位置模式下，忽略標誌點擊，只檢測地圖模型
-                // 檢測與地圖的交點（排除標誌）
+                // 檢測與地圖的交點（排除標誌和地面模型）
                 const allModels = [];
                 if (this.mapModels) {
-                    Object.values(this.mapModels).forEach(model => {
-                        if (model) allModels.push(model);
+                    Object.entries(this.mapModels).forEach(([type, model]) => {
+                        // 排除地面模型（ground），只檢測建築物等其他模型
+                        if (model && type !== 'ground') {
+                            allModels.push(model);
+                        }
                     });
                 }
                 if (this.mapModel) {

@@ -5,9 +5,16 @@ class StreetViewController {
         this.active = false;
 
         // 速度與高度設定
-        this.moveSpeed = 1.2;   // 移動速度（越大越快）
-        this.turnSpeed = 0.04;  // 左右轉向速度
+        this.moveSpeed = 0.8;   // 移動速度（越大越快，降低以減慢移動）
+        this.turnSpeed = 0.025; // 左右轉向速度（降低以減慢轉頭）
         this.groundY = 6;       // 相機高度（視為站在地面上的高度）
+
+        // 跳躍相關設定
+        this.jumpSpeed = 20;    // 跳躍初始速度（增加以跳得更高更快）
+        this.gravity = -50;      // 重力加速度（負值表示向下，增加絕對值讓下降更快）
+        this.verticalVelocity = 0; // 當前垂直速度
+        this.isOnGround = true; // 是否在地面上
+        this.maxJumpHeight = 30; // 最大跳躍高度（相對於地面）
 
         // 碰撞相關設定
         this.collisionRadius = 0.8;                // 與牆壁保持的最小距離（進一步降低）
@@ -21,7 +28,8 @@ class StreetViewController {
             left: false,
             right: false,
             turnLeft: false,
-            turnRight: false
+            turnRight: false,
+            jump: false
         };
 
         this._onKeyDown = this.onKeyDown.bind(this);
@@ -80,17 +88,28 @@ class StreetViewController {
         const camera = this.map3D.camera;
         let pos = new THREE.Vector3(0, this.groundY, 30);
         let groundLevel = 0; // 地面高度
+        
+        // 重置跳躍相關狀態
+        this.verticalVelocity = 0;
+        this.isOnGround = true;
 
         // 優先使用多模型系統
         if (this.map3D.mapModels && (this.map3D.mapModels.building || this.map3D.mapModels.ground)) {
             const box = new THREE.Box3();
             if (this.map3D.mapModels.building) box.expandByObject(this.map3D.mapModels.building);
-            if (this.map3D.mapModels.ground) box.expandByObject(this.map3D.mapModels.ground);
+            
+            // 計算地面高度：使用地面模型的最高 Y 點
+            if (this.map3D.mapModels.ground) {
+                const groundBox = new THREE.Box3().setFromObject(this.map3D.mapModels.ground);
+                groundLevel = groundBox.max.y; // 使用地面模型的最高 Y 點
+                box.expandByObject(this.map3D.mapModels.ground);
+            } else {
+                const min = box.min;
+                groundLevel = min.y; // 如果沒有地面模型，使用建築物的最低點
+            }
             
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
-            const min = box.min; // 獲取最小邊界（通常是地面）
-            groundLevel = min.y; // 使用地面的 Y 座標
             
             // 計算一個在地面上的起始位置（在模型邊緣附近）
             const radius = Math.max(size.x, size.z) * 0.3; // 稍微靠近中心一點
@@ -125,29 +144,47 @@ class StreetViewController {
     }
 
     onKeyDown(e) {
+        // 阻止所有控制鍵的預設行為，避免觸發瀏覽器快捷鍵
         switch (e.code) {
             case 'KeyW':
             case 'ArrowUp':
                 this.keys.forward = true;
+                e.preventDefault();
                 break;
             case 'KeyS':
             case 'ArrowDown':
                 this.keys.back = true;
+                e.preventDefault();
                 break;
             case 'KeyA':
                 this.keys.left = true;
+                e.preventDefault();
                 break;
             case 'KeyD':
                 this.keys.right = true;
+                e.preventDefault();
                 break;
             case 'ArrowLeft':
                 this.keys.turnLeft = true;
+                e.preventDefault();
                 break;
             case 'ArrowRight':
                 this.keys.turnRight = true;
+                e.preventDefault();
+                break;
+            case 'Space':
+                // 空格鍵跳躍（只允許在地面時跳躍）
+                // 必須阻止預設行為，避免觸發頁面滾動或其他快捷鍵
+                e.preventDefault();
+                if (this.isOnGround && !this.keys.jump) {
+                    this.keys.jump = true;
+                    this.verticalVelocity = this.jumpSpeed;
+                    this.isOnGround = false;
+                }
                 break;
             case 'Escape':
                 // Esc 離開街景模式
+                e.preventDefault();
                 this.deactivate();
                 {
                     const btn = document.getElementById('streetViewBtn');
@@ -180,6 +217,9 @@ class StreetViewController {
                 break;
             case 'ArrowRight':
                 this.keys.turnRight = false;
+                break;
+            case 'Space':
+                this.keys.jump = false;
                 break;
             default:
                 break;
@@ -221,12 +261,12 @@ class StreetViewController {
             move.multiplyScalar(this.moveSpeed * dt * 60);
 
             // ========= 碰撞偵測：避免穿牆 =========
-            // 使用所有可見的模型進行碰撞檢測（建築物和地板）
+            // 使用建築物模型進行碰撞檢測（排除地面模型）
             const collisionObjects = [];
             if (this.map3D.mapModels) {
-                // 使用多模型系統
+                // 使用多模型系統，只使用建築物模型，排除地面模型
                 if (this.map3D.mapModels.building) collisionObjects.push(this.map3D.mapModels.building);
-                if (this.map3D.mapModels.ground) collisionObjects.push(this.map3D.mapModels.ground);
+                // 不再使用地面模型進行碰撞檢測
             } else if (this.map3D.mapModel) {
                 // 向後兼容單模型系統
                 collisionObjects.push(this.map3D.mapModel);
@@ -240,30 +280,48 @@ class StreetViewController {
 
                 if (distance > 0) {
                     const dir = horizontalMove.clone().normalize();
-                    const origin = camera.position.clone();
-                    origin.y -= 1; // 稍微降低射線起點
-
-                    // 檢查移動方向是否有碰撞
-                    this.raycaster.set(origin, dir);
-                    const maxDistance = Math.min(distance + this.collisionRadius, this.maxStepDistance);
+                    
+                    // 改進的碰撞檢測：使用相機的實際高度範圍進行檢測
+                    // 檢測從相機位置到相機下方3單位的範圍（涵蓋跳躍時的所有高度）
+                    const checkHeights = [];
+                    const cameraHeight = camera.position.y;
+                    // 從相機位置向下檢測，每0.5單位一個檢測點，總共檢測6個點
+                    for (let i = 0; i <= 6; i++) {
+                        checkHeights.push(-i * 0.5);
+                    }
                     
                     let hit = null;
                     let minHitDistance = Infinity;
                     
-                    for (const obj of collisionObjects) {
-                        // 只檢測 Mesh 物件，排除邊框線（LineSegments）
-                        const intersects = this.raycaster.intersectObject(obj, true);
-                        for (const intersection of intersects) {
-                            // 過濾掉邊框線：檢查物件類型，只保留 Mesh
-                            const object = intersection.object;
-                            // 跳過 LineSegments（邊框線）和 Line（線條）
-                            if (object.isLineSegments || object.isLine) {
-                                continue;
-                            }
-                            // 只檢測 Mesh 物件
-                            if (object.isMesh && intersection.distance <= maxDistance && intersection.distance < minHitDistance) {
-                                hit = intersection;
-                                minHitDistance = intersection.distance;
+                    for (const heightOffset of checkHeights) {
+                        const origin = camera.position.clone();
+                        origin.y += heightOffset; // 根據當前高度調整檢測點
+
+                        // 檢查移動方向是否有碰撞
+                        this.raycaster.set(origin, dir);
+                        const maxDistance = Math.min(distance + this.collisionRadius, this.maxStepDistance);
+                        
+                        for (const obj of collisionObjects) {
+                            // 只檢測 Mesh 物件，排除邊框線（LineSegments）
+                            const intersects = this.raycaster.intersectObject(obj, true);
+                            for (const intersection of intersects) {
+                                // 過濾掉邊框線：檢查物件類型，只保留 Mesh
+                                const object = intersection.object;
+                                // 跳過 LineSegments（邊框線）和 Line（線條）
+                                if (object.isLineSegments || object.isLine) {
+                                    continue;
+                                }
+                                // 只檢測 Mesh 物件，並且檢查交點是否在合理的高度範圍內
+                                if (object.isMesh && intersection.distance <= maxDistance) {
+                                    // 檢查交點的高度是否在檢測範圍內
+                                    const hitPoint = intersection.point;
+                                    const heightDiff = Math.abs(hitPoint.y - origin.y);
+                                    // 只考慮高度差在合理範圍內的碰撞（擴大範圍以涵蓋跳躍時的高度）
+                                    if (heightDiff < 8 && intersection.distance < minHitDistance) {
+                                        hit = intersection;
+                                        minHitDistance = intersection.distance;
+                                    }
+                                }
                             }
                         }
                     }
@@ -280,25 +338,35 @@ class StreetViewController {
                             
                             // 如果主要是側向移動（左右），允許側向滑動
                             if (rightComponent > forwardComponent * 1.5) {
-                                // 側向移動：檢查側向是否有足夠空間
+                                // 側向移動：檢查側向是否有足夠空間（從多個高度檢測）
                                 const sideDir = right.clone().multiplyScalar(Math.sign(right.dot(dir)));
-                                this.raycaster.set(origin, sideDir);
                                 let sideHit = null;
                                 let sideHitDistance = Infinity;
                                 
-                                for (const obj of collisionObjects) {
-                                    const intersects = this.raycaster.intersectObject(obj, true);
-                                    for (const intersection of intersects) {
-                                        // 過濾掉邊框線
-                                        const object = intersection.object;
-                                        if (object.isLineSegments || object.isLine) {
-                                            continue;
-                                        }
-                                        // 只檢測 Mesh 物件
-                                        if (object.isMesh && intersection.distance <= distance + this.collisionRadius && 
-                                            intersection.distance < sideHitDistance) {
-                                            sideHit = intersection;
-                                            sideHitDistance = intersection.distance;
+                                // 從多個高度進行側向碰撞檢測（使用相同的檢測點）
+                                for (const heightOffset of checkHeights) {
+                                    const sideOrigin = camera.position.clone();
+                                    sideOrigin.y += heightOffset;
+                                    this.raycaster.set(sideOrigin, sideDir);
+                                    
+                                    for (const obj of collisionObjects) {
+                                        const intersects = this.raycaster.intersectObject(obj, true);
+                                        for (const intersection of intersects) {
+                                            // 過濾掉邊框線
+                                            const object = intersection.object;
+                                            if (object.isLineSegments || object.isLine) {
+                                                continue;
+                                            }
+                                            // 只檢測 Mesh 物件，並檢查高度差
+                                            if (object.isMesh) {
+                                                const hitPoint = intersection.point;
+                                                const heightDiff = Math.abs(hitPoint.y - sideOrigin.y);
+                                                if (heightDiff < 8 && intersection.distance <= distance + this.collisionRadius && 
+                                                    intersection.distance < sideHitDistance) {
+                                                    sideHit = intersection;
+                                                    sideHitDistance = intersection.distance;
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -334,8 +402,80 @@ class StreetViewController {
             camera.position.add(move);
         }
 
-        // 固定在「平面」上
-        camera.position.y = this.groundY;
+        // ========= 跳躍與重力系統 =========
+        // 計算地面高度：使用地面模型的最高 Y 點
+        let groundLevel = 0;
+        if (this.map3D.mapModels && (this.map3D.mapModels.building || this.map3D.mapModels.ground)) {
+            // 如果有地面模型，使用地面模型的最高 Y 點
+            if (this.map3D.mapModels.ground) {
+                const groundBox = new THREE.Box3().setFromObject(this.map3D.mapModels.ground);
+                groundLevel = groundBox.max.y; // 使用地面模型的最高 Y 點
+            } else {
+                // 如果沒有地面模型，使用建築物的最低點
+                const box = new THREE.Box3();
+                if (this.map3D.mapModels.building) box.expandByObject(this.map3D.mapModels.building);
+                groundLevel = box.min.y;
+            }
+        } else if (this.map3D.mapModel) {
+            const box = new THREE.Box3().setFromObject(this.map3D.mapModel);
+            groundLevel = box.min.y;
+        }
+        const targetGroundY = groundLevel + this.groundY;
+
+        // 應用重力
+        this.verticalVelocity += this.gravity * dt;
+        
+        // 檢測上方碰撞（天花板）
+        const collisionObjects = [];
+        if (this.map3D.mapModels) {
+            if (this.map3D.mapModels.building) collisionObjects.push(this.map3D.mapModels.building);
+        } else if (this.map3D.mapModel) {
+            collisionObjects.push(this.map3D.mapModel);
+        }
+
+        let hitCeiling = false;
+        if (this.verticalVelocity > 0 && collisionObjects.length > 0) {
+            // 向上移動時檢測天花板
+            const upRay = new THREE.Vector3(0, 1, 0);
+            const rayOrigin = camera.position.clone();
+            rayOrigin.y += 0.5; // 從相機稍微上方開始檢測
+            
+            this.raycaster.set(rayOrigin, upRay);
+            const maxCheckDistance = this.verticalVelocity * dt + 1; // 檢查距離
+            
+            for (const obj of collisionObjects) {
+                const intersects = this.raycaster.intersectObject(obj, true);
+                for (const intersection of intersects) {
+                    const object = intersection.object;
+                    if (object.isLineSegments || object.isLine) continue;
+                    if (object.isMesh && intersection.distance < maxCheckDistance) {
+                        // 檢測到天花板
+                        const ceilingY = intersection.point.y - 1.5; // 留一點空間
+                        if (camera.position.y + this.verticalVelocity * dt >= ceilingY) {
+                            camera.position.y = ceilingY;
+                            this.verticalVelocity = 0;
+                            hitCeiling = true;
+                            break;
+                        }
+                    }
+                }
+                if (hitCeiling) break;
+            }
+        }
+
+        // 更新垂直位置
+        if (!hitCeiling) {
+            camera.position.y += this.verticalVelocity * dt;
+        }
+
+        // 檢測是否著地
+        if (camera.position.y <= targetGroundY) {
+            camera.position.y = targetGroundY;
+            this.verticalVelocity = 0;
+            this.isOnGround = true;
+        } else {
+            this.isOnGround = false;
+        }
 
         // 根據 yaw 決定看向的方向（不抬頭低頭，只左右）
         const target = new THREE.Vector3(
