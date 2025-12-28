@@ -10,8 +10,6 @@ class Map3D {
         this.mapModels = {}; // 儲存多個模型：{ building: obj, ground: obj }
         this.photoMarkers = []; // 儲存圖片標誌物件
         this.currentPhotoMarkerId = null; // 當前選中的圖片標誌 ID
-        this.isSelectingPosition = false; // 是否正在選擇位置
-        this.selectPositionCallback = null; // 位置選擇回調函數
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
         // 縮放速度係數（數字越大縮放越快）
@@ -769,17 +767,6 @@ class Map3D {
         this.currentPhotoMarkerId = null;
     }
 
-    // 開始選擇位置
-    startSelectPosition(callback) {
-        this.isSelectingPosition = true;
-        this.selectPositionCallback = callback;
-    }
-
-    // 停止選擇位置
-    stopSelectPosition() {
-        this.isSelectingPosition = false;
-        this.selectPositionCallback = null;
-    }
 
     // 重置視角
     resetView() {
@@ -851,12 +838,6 @@ class Map3D {
             if (this.isStreetViewMode) {
                 return;
             }
-
-            // 選擇位置模式優先：不處理地圖拖動
-            if (this.isSelectingPosition) {
-                // 在選擇位置模式下，不啟動地圖拖動
-                return;
-            }
             
             // 右鍵：旋轉鏡頭
             if (e.button === 2) {
@@ -894,11 +875,6 @@ class Map3D {
         this.renderer.domElement.addEventListener('mousemove', (e) => {
             // 街景模式下禁用滑鼠控制
             if (this.isStreetViewMode) {
-                return;
-            }
-
-            // 選擇位置模式下禁用滑鼠控制
-            if (this.isSelectingPosition) {
                 return;
             }
             
@@ -968,6 +944,11 @@ class Map3D {
         });
 
         this.renderer.domElement.addEventListener('mouseup', (e) => {
+            // 街景模式下禁用滑鼠控制
+            if (this.isStreetViewMode) {
+                return;
+            }
+            
             // 在 Pointer Lock 模式下，不重置狀態（讓 Pointer Lock 的處理接管）
             if (!this.isMouseLocked) {
                 isRotating = false;
@@ -982,8 +963,12 @@ class Map3D {
             }
         });
         
-        // 防止右鍵選單
+        // 防止右鍵選單（街景模式下也禁用）
         this.renderer.domElement.addEventListener('contextmenu', (e) => {
+            if (this.isStreetViewMode) {
+                e.preventDefault();
+                return;
+            }
             e.preventDefault();
         });
 
@@ -1022,50 +1007,7 @@ class Map3D {
 
             this.raycaster.setFromCamera(this.mouse, this.camera);
 
-            // 如果正在選擇位置模式，優先處理位置選擇
-            if (this.isSelectingPosition) {
-                // 在選擇位置模式下，忽略標誌點擊，只檢測地圖模型
-                // 檢測與地圖的交點（排除標誌和地面模型）
-                const allModels = [];
-                if (this.mapModels) {
-                    Object.entries(this.mapModels).forEach(([type, model]) => {
-                        // 排除地面模型（ground），只檢測建築物等其他模型
-                        if (model && type !== 'ground') {
-                            allModels.push(model);
-                        }
-                    });
-                }
-                if (this.mapModel) {
-                    allModels.push(this.mapModel);
-                }
-                
-                let intersects = [];
-                for (const model of allModels) {
-                    const modelIntersects = this.raycaster.intersectObject(model, true);
-                    intersects = intersects.concat(modelIntersects);
-                }
-                
-                if (intersects.length > 0) {
-                    // 選擇最近的交點
-                    intersects.sort((a, b) => a.distance - b.distance);
-                    const point = intersects[0].point;
-                    if (this.selectPositionCallback) {
-                        this.selectPositionCallback(point);
-                    }
-                    this.stopSelectPosition();
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                } else {
-                    console.warn('未檢測到模型交點，請點擊地圖上的模型表面');
-                }
-                // 在選擇位置模式下，即使沒點到模型也不觸發其他事件
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-            }
-
-            // 檢測圖片標誌點擊（只在非選擇位置模式下）
+            // 檢測圖片標誌點擊
             const markerObjects = this.photoMarkers.map(m => m.group);
             const intersects = this.raycaster.intersectObjects(markerObjects, true);
             
@@ -1110,6 +1052,10 @@ class Map3D {
         
         // 在 Pointer Lock 模式下，需要單獨處理按鈕狀態
         const handleLockedMouseDown = (e) => {
+            // 街景模式下禁用滑鼠控制
+            if (this.isStreetViewMode) {
+                return;
+            }
             if (this.isMouseLocked) {
                 if (e.button === 2) {
                     isRightButtonDownLocked = true;
@@ -1120,6 +1066,10 @@ class Map3D {
         };
         
         const handleLockedMouseUp = (e) => {
+            // 街景模式下禁用滑鼠控制
+            if (this.isStreetViewMode) {
+                return;
+            }
             if (e.button === 2) {
                 isRightButtonDownLocked = false;
             } else if (e.button === 0) {
@@ -1134,7 +1084,6 @@ class Map3D {
         document.addEventListener('mousemove', (e) => {
             if (!this.isMouseLocked) return;
             if (this.isStreetViewMode) return;
-            if (this.isSelectingPosition) return;
 
             // 使用 movementX/Y 來獲取相對移動（不受視窗邊界限制）
             if (e.movementX !== undefined && e.movementY !== undefined) {

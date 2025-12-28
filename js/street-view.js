@@ -9,12 +9,24 @@ class StreetViewController {
         this.turnSpeed = 0.025; // 左右轉向速度（降低以減慢轉頭）
         this.groundY = 6;       // 相機高度（視為站在地面上的高度）
 
-        // 跳躍相關設定
-        this.jumpSpeed = 20;    // 跳躍初始速度（增加以跳得更高更快）
-        this.gravity = -50;      // 重力加速度（負值表示向下，增加絕對值讓下降更快）
+        // 跳躍相關設定（使用接近3D遊戲的數值）
+        this.jumpSpeed = 25;    // 跳躍初始速度（增加以跳得更高）
+        this.gravity = -70;     // 重力加速度（接近真實3D遊戲的重力，讓下降更快）
         this.verticalVelocity = 0; // 當前垂直速度
         this.isOnGround = true; // 是否在地面上
-        this.maxJumpHeight = 30; // 最大跳躍高度（相對於地面）
+        this.maxJumpHeight = 40; // 最大跳躍高度（相對於地面）
+
+        // 滑鏟相關設定
+        this.isSliding = false;      // 是否正在滑鏟
+        this.isCrouching = false;     // 是否蹲下
+        this.slideSpeed = 3.5;        // 滑鏟速度（比正常移動快很多）
+        this.slideDuration = 0.4;     // 滑鏟持續時間（秒）
+        this.slideCooldown = 1.5;     // 滑鏟冷卻時間（秒）
+        this.slideCooldownTimer = 0;  // 滑鏟冷卻計時器
+        this.slideTimer = 0;          // 滑鏟計時器
+        this.normalGroundY = 6;       // 正常站立高度
+        this.crouchGroundY = 3;       // 蹲下高度
+        this.currentGroundY = 6;      // 當前高度
 
         // 碰撞相關設定
         this.collisionRadius = 0.8;                // 與牆壁保持的最小距離（進一步降低）
@@ -29,7 +41,8 @@ class StreetViewController {
             right: false,
             turnLeft: false,
             turnRight: false,
-            jump: false
+            jump: false,
+            shift: false
         };
 
         this._onKeyDown = this.onKeyDown.bind(this);
@@ -130,6 +143,14 @@ class StreetViewController {
 
         // 更新 groundY 為實際的地面高度 + 相機高度
         this.groundY = groundLevel + 6;
+        this.normalGroundY = 6;
+        this.currentGroundY = this.normalGroundY;
+        
+        // 重置滑鏟相關狀態
+        this.isSliding = false;
+        this.isCrouching = false;
+        this.slideTimer = 0;
+        this.slideCooldownTimer = 0;
 
         camera.position.copy(pos);
 
@@ -182,6 +203,13 @@ class StreetViewController {
                     this.isOnGround = false;
                 }
                 break;
+            case 'ShiftLeft':
+            case 'ShiftRight':
+                // Shift 鍵：移動中滑鏟，不移動時蹲下
+                e.preventDefault();
+                this.keys.shift = true;
+                this.handleShiftKey();
+                break;
             case 'Escape':
                 // Esc 離開街景模式
                 e.preventDefault();
@@ -221,8 +249,37 @@ class StreetViewController {
             case 'Space':
                 this.keys.jump = false;
                 break;
+            case 'ShiftLeft':
+            case 'ShiftRight':
+                this.keys.shift = false;
+                // 放開 Shift 時，如果不是在滑鏟，則取消蹲下（會平滑上升）
+                if (!this.isSliding) {
+                    this.isCrouching = false;
+                    // 不直接設置 currentGroundY，讓平滑過渡邏輯處理
+                }
+                break;
             default:
                 break;
+        }
+    }
+
+    // 處理 Shift 鍵：移動中滑鏟，不移動時蹲下
+    handleShiftKey() {
+        // 檢查是否在移動
+        const isMoving = this.keys.forward || this.keys.back || this.keys.left || this.keys.right;
+        
+        if (isMoving && this.isOnGround && !this.isSliding && this.slideCooldownTimer <= 0) {
+            // 移動中：觸發滑鏟
+            this.isSliding = true;
+            this.isCrouching = true;
+            this.slideTimer = this.slideDuration;
+            this.slideCooldownTimer = this.slideCooldown;
+            this.currentGroundY = this.crouchGroundY;
+            console.log('滑鏟！');
+        } else if (!isMoving && this.isOnGround) {
+            // 不移動：只是蹲下
+            this.isCrouching = true;
+            this.currentGroundY = this.crouchGroundY;
         }
     }
 
@@ -241,6 +298,23 @@ class StreetViewController {
     update(dt) {
         const camera = this.map3D.camera;
 
+        // 更新滑鏟計時器和冷卻計時器
+        if (this.slideTimer > 0) {
+            this.slideTimer -= dt;
+            if (this.slideTimer <= 0) {
+                // 滑鏟結束
+                this.isSliding = false;
+                if (!this.keys.shift) {
+                    // 如果沒有按住 Shift，取消蹲下
+                    this.isCrouching = false;
+                    this.currentGroundY = this.normalGroundY;
+                }
+            }
+        }
+        if (this.slideCooldownTimer > 0) {
+            this.slideCooldownTimer -= dt;
+        }
+
         // 左右轉頭
         if (this.keys.turnLeft) this.yaw += this.turnSpeed;
         if (this.keys.turnRight) this.yaw -= this.turnSpeed;
@@ -249,16 +323,27 @@ class StreetViewController {
         const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
 
         const move = new THREE.Vector3();
-
-        if (this.keys.forward) move.add(forward);
-        if (this.keys.back) move.sub(forward);
-        if (this.keys.left) move.sub(right);
-        if (this.keys.right) move.add(right);
+        
+        // 滑鏟時：高速向前移動
+        if (this.isSliding) {
+            // 滑鏟時只能向前移動，速度很快
+            move.add(forward.clone().multiplyScalar(this.slideSpeed * dt * 60));
+        } else {
+            // 正常移動
+            if (this.keys.forward) move.add(forward);
+            if (this.keys.back) move.sub(forward);
+            if (this.keys.left) move.sub(right);
+            if (this.keys.right) move.add(right);
+        }
 
         if (move.lengthSq() > 0) {
-            move.normalize();
-            // 乘上 60 讓速度在不同幀率下比較一致
-            move.multiplyScalar(this.moveSpeed * dt * 60);
+            // 滑鏟時不需要 normalize，因為已經直接設定了方向和速度
+            if (!this.isSliding) {
+                move.normalize();
+                // 乘上 60 讓速度在不同幀率下比較一致
+                move.multiplyScalar(this.moveSpeed * dt * 60);
+            }
+            // 滑鏟時的移動速度已經在之前設定好了
 
             // ========= 碰撞偵測：避免穿牆 =========
             // 使用建築物模型進行碰撞檢測（排除地面模型）
@@ -420,7 +505,8 @@ class StreetViewController {
             const box = new THREE.Box3().setFromObject(this.map3D.mapModel);
             groundLevel = box.min.y;
         }
-        const targetGroundY = groundLevel + this.groundY;
+        // 計算目標地面高度（考慮蹲下狀態）
+        const targetGroundY = groundLevel + this.currentGroundY;
 
         // 應用重力
         this.verticalVelocity += this.gravity * dt;
@@ -468,13 +554,38 @@ class StreetViewController {
             camera.position.y += this.verticalVelocity * dt;
         }
 
-        // 檢測是否著地
+        // 檢測是否著地（使用當前高度設定，考慮蹲下）
         if (camera.position.y <= targetGroundY) {
             camera.position.y = targetGroundY;
             this.verticalVelocity = 0;
             this.isOnGround = true;
         } else {
             this.isOnGround = false;
+        }
+        
+        // 平滑調整高度（蹲下/站立過渡）
+        if (this.isOnGround && !this.isSliding) {
+            if (this.isCrouching) {
+                // 平滑過渡到蹲下高度
+                const crouchTargetY = groundLevel + this.crouchGroundY;
+                if (Math.abs(camera.position.y - crouchTargetY) > 0.05) {
+                    // 使用較慢的速度下降（蹲下）
+                    camera.position.y = THREE.MathUtils.lerp(camera.position.y, crouchTargetY, dt * 8);
+                } else {
+                    camera.position.y = crouchTargetY;
+                }
+                this.currentGroundY = this.crouchGroundY;
+            } else {
+                // 平滑過渡到站立高度（慢慢上升）
+                const standTargetY = groundLevel + this.normalGroundY;
+                if (Math.abs(camera.position.y - standTargetY) > 0.05) {
+                    // 使用較慢的速度上升（取消蹲下時慢慢上升）
+                    camera.position.y = THREE.MathUtils.lerp(camera.position.y, standTargetY, dt * 6);
+                } else {
+                    camera.position.y = standTargetY;
+                }
+                this.currentGroundY = this.normalGroundY;
+            }
         }
 
         // 根據 yaw 決定看向的方向（不抬頭低頭，只左右）
