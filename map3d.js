@@ -25,6 +25,7 @@ class Map3D {
         this.init();
         this.setupEventListeners();
         this.setupMouseLock();
+        this.setupTouchControls();
         this.loadModel();
     }
 
@@ -1132,6 +1133,256 @@ class Map3D {
                 }
             }
         });
+    }
+
+    // 設置觸控控制
+    setupTouchControls() {
+        // 觸控事件處理
+        let touchState = {
+            touches: [],
+            isPanning: false,
+            isRotating: false,
+            initialDistance: 0,
+            initialPanPosition: { x: 0, y: 0 },
+            initialRotation: { x: 0, y: 0 }
+        };
+
+        // 計算兩點之間的距離
+        const getDistance = (touch1, touch2) => {
+            const dx = touch1.clientX - touch2.clientX;
+            const dy = touch1.clientY - touch2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        };
+
+        // 觸控開始
+        this.renderer.domElement.addEventListener('touchstart', (e) => {
+            if (this.isStreetViewMode) {
+                return;
+            }
+
+            e.preventDefault();
+            touchState.touches = Array.from(e.touches);
+
+            if (touchState.touches.length === 1) {
+                // 單指：左鍵（平移）
+                touchState.isPanning = true;
+                touchState.initialPanPosition = {
+                    x: touchState.touches[0].clientX,
+                    y: touchState.touches[0].clientY
+                };
+            } else if (touchState.touches.length === 2) {
+                // 雙指：右鍵（旋轉）或縮放
+                touchState.isRotating = true;
+                touchState.initialDistance = getDistance(touchState.touches[0], touchState.touches[1]);
+                touchState.initialRotation = {
+                    x: this.camera.rotation.x,
+                    y: this.camera.rotation.y
+                };
+                // 初始化雙指中心點位置（用於旋轉）
+                const touch1 = touchState.touches[0];
+                const touch2 = touchState.touches[1];
+                touchState.initialPanPosition = {
+                    x: (touch1.clientX + touch2.clientX) / 2,
+                    y: (touch1.clientY + touch2.clientY) / 2
+                };
+            }
+        }, { passive: false });
+
+        // 觸控移動
+        this.renderer.domElement.addEventListener('touchmove', (e) => {
+            if (this.isStreetViewMode) {
+                return;
+            }
+
+            e.preventDefault();
+            touchState.touches = Array.from(e.touches);
+
+            if (touchState.touches.length === 1 && touchState.isPanning) {
+                // 單指移動：平移
+                const deltaX = touchState.touches[0].clientX - touchState.initialPanPosition.x;
+                const deltaY = touchState.touches[0].clientY - touchState.initialPanPosition.y;
+
+                // 更新相機矩陣以獲取正確的方向
+                this.camera.updateMatrixWorld();
+
+                // 計算相機的右方向和上方向
+                const right = new THREE.Vector3();
+                right.setFromMatrixColumn(this.camera.matrixWorld, 0);
+                right.normalize();
+
+                const up = new THREE.Vector3();
+                up.setFromMatrixColumn(this.camera.matrixWorld, 1);
+                up.normalize();
+
+                // 計算平移速度
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                const height = rect.height;
+                const distance = this.camera.position.length();
+                const fov = this.camera.fov * (Math.PI / 180);
+                const visibleHeight = 2 * Math.tan(fov / 2) * distance;
+                const panSpeed = visibleHeight / height;
+
+                const panX = right.clone().multiplyScalar(-deltaX * panSpeed);
+                const panY = up.clone().multiplyScalar(deltaY * panSpeed);
+
+                // 平移相機
+                this.camera.position.add(panX);
+                this.camera.position.add(panY);
+
+                touchState.initialPanPosition = {
+                    x: touchState.touches[0].clientX,
+                    y: touchState.touches[0].clientY
+                };
+            } else if (touchState.touches.length === 2 && touchState.isRotating) {
+                // 雙指移動：旋轉或縮放
+                const currentDistance = getDistance(touchState.touches[0], touchState.touches[1]);
+                const distanceChange = currentDistance - touchState.initialDistance;
+                const distanceChangePercent = Math.abs(distanceChange / touchState.initialDistance);
+
+                // 如果距離變化超過5%，視為縮放操作
+                if (distanceChangePercent > 0.05) {
+                    // 縮放：雙指距離改變（中鍵縮放）
+                    const zoomDelta = -distanceChange * this.zoomSpeed * 0.1;
+                    this.applyZoom(zoomDelta);
+                    touchState.initialDistance = currentDistance;
+                } else {
+                    // 旋轉：雙指移動（右鍵旋轉）
+                    const touch1 = touchState.touches[0];
+                    const touch2 = touchState.touches[1];
+                    const centerX = (touch1.clientX + touch2.clientX) / 2;
+                    const centerY = (touch1.clientY + touch2.clientY) / 2;
+
+                    // 計算兩指中心點的移動
+                    if (!touchState.initialPanPosition.x && !touchState.initialPanPosition.y) {
+                        touchState.initialPanPosition = { x: centerX, y: centerY };
+                    }
+
+                    const deltaX = centerX - touchState.initialPanPosition.x;
+                    const deltaY = centerY - touchState.initialPanPosition.y;
+
+                    this.camera.rotation.order = 'YXZ';
+                    this.camera.rotation.y -= deltaX * 0.006;
+                    this.camera.rotation.x -= deltaY * 0.006;
+                    this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
+
+                    touchState.initialPanPosition = { x: centerX, y: centerY };
+                }
+            }
+        }, { passive: false });
+
+        // 觸控結束
+        this.renderer.domElement.addEventListener('touchend', (e) => {
+            if (this.isStreetViewMode) {
+                return;
+            }
+
+            e.preventDefault();
+            touchState.touches = Array.from(e.touches);
+
+            if (touchState.touches.length === 0) {
+                // 所有手指都離開
+                touchState.isPanning = false;
+                touchState.isRotating = false;
+                touchState.initialDistance = 0;
+            } else if (touchState.touches.length === 1) {
+                // 從雙指變為單指：切換到平移模式
+                touchState.isRotating = false;
+                touchState.isPanning = true;
+                touchState.initialPanPosition = {
+                    x: touchState.touches[0].clientX,
+                    y: touchState.touches[0].clientY
+                };
+            }
+        }, { passive: false });
+
+        // 觸控按鈕控制
+        const moveForwardBtn = document.getElementById('moveForwardBtn');
+        const moveBackwardBtn = document.getElementById('moveBackwardBtn');
+        const turnLeftBtn = document.getElementById('turnLeftBtn');
+        const turnRightBtn = document.getElementById('turnRightBtn');
+
+        let buttonState = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false
+        };
+
+        const handleButtonPress = (direction, isPressed) => {
+            buttonState[direction] = isPressed;
+        };
+
+        const handleButtonTouch = (btn, direction) => {
+            if (!btn) return;
+
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleButtonPress(direction, true);
+            }, { passive: false });
+
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleButtonPress(direction, false);
+            }, { passive: false });
+
+            btn.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleButtonPress(direction, false);
+            }, { passive: false });
+
+            // 也支持滑鼠點擊（用於測試）
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleButtonPress(direction, true);
+            });
+
+            btn.addEventListener('mouseup', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleButtonPress(direction, false);
+            });
+
+            btn.addEventListener('mouseleave', (e) => {
+                handleButtonPress(direction, false);
+            });
+        };
+
+        handleButtonTouch(moveForwardBtn, 'forward');
+        handleButtonTouch(moveBackwardBtn, 'backward');
+        handleButtonTouch(turnLeftBtn, 'left');
+        handleButtonTouch(turnRightBtn, 'right');
+
+        // 按鈕控制更新循環
+        const buttonControlUpdate = () => {
+            if (this.isStreetViewMode) {
+                requestAnimationFrame(buttonControlUpdate);
+                return;
+            }
+
+            const moveSpeed = 0.5; // 移動速度
+            const turnSpeed = 0.02; // 旋轉速度
+
+            if (buttonState.forward || buttonState.backward) {
+                const direction = new THREE.Vector3();
+                this.camera.getWorldDirection(direction);
+                const moveDistance = buttonState.forward ? moveSpeed : -moveSpeed;
+                this.camera.position.add(direction.multiplyScalar(moveDistance));
+            }
+
+            if (buttonState.left || buttonState.right) {
+                const turnAmount = buttonState.left ? turnSpeed : -turnSpeed;
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y += turnAmount;
+            }
+
+            requestAnimationFrame(buttonControlUpdate);
+        };
+
+        buttonControlUpdate();
     }
 
     // 設置滑鼠鎖定功能
