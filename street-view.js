@@ -324,7 +324,7 @@ class StreetViewController {
 
         const move = new THREE.Vector3();
         
-        // 滑鏟時：高速向前移動
+        // 滑鏟時：高速向前移動（需要進行碰撞檢測）
         if (this.isSliding) {
             // 滑鏟時只能向前移動，速度很快
             move.add(forward.clone().multiplyScalar(this.slideSpeed * dt * 60));
@@ -345,7 +345,8 @@ class StreetViewController {
             }
             // 滑鏟時的移動速度已經在之前設定好了
 
-            // ========= 碰撞偵測：避免穿牆 =========
+            // ========= 碰撞偵測：避免穿牆（包括滑鏟時的障礙物檢測）=========
+            // 滑鏟時使用更嚴格的碰撞檢測：分段檢測整個路徑
             // 使用建築物模型進行碰撞檢測（排除地面模型）
             const collisionObjects = [];
             if (this.map3D.mapModels) {
@@ -358,53 +359,190 @@ class StreetViewController {
             }
             
             if (collisionObjects.length > 0) {
-                // 只看水平平面上的方向
+                // 滑鏟時使用分段檢測：將移動路徑分成多段進行檢測，避免高速移動時穿透
                 const horizontalMove = move.clone();
                 horizontalMove.y = 0;
                 const distance = horizontalMove.length();
 
                 if (distance > 0) {
-                    const dir = horizontalMove.clone().normalize();
-                    
-                    // 改進的碰撞檢測：使用相機的實際高度範圍進行檢測
-                    // 檢測從相機位置到相機下方3單位的範圍（涵蓋跳躍時的所有高度）
-                    const checkHeights = [];
-                    const cameraHeight = camera.position.y;
-                    // 從相機位置向下檢測，每0.5單位一個檢測點，總共檢測6個點
-                    for (let i = 0; i <= 6; i++) {
-                        checkHeights.push(-i * 0.5);
-                    }
-                    
                     let hit = null;
                     let minHitDistance = Infinity;
+                    let safeMove = move.clone();
                     
-                    for (const heightOffset of checkHeights) {
-                        const origin = camera.position.clone();
-                        origin.y += heightOffset; // 根據當前高度調整檢測點
-
-                        // 檢查移動方向是否有碰撞
-                        this.raycaster.set(origin, dir);
-                        const maxDistance = Math.min(distance + this.collisionRadius, this.maxStepDistance);
+                    // 滑鏟時的特殊處理：分段檢測整個路徑
+                    if (this.isSliding) {
+                        const slideDistance = move.length();
+                        const slideDir = move.clone().normalize();
+                        const segmentLength = 0.5; // 每段檢測長度（更小的值提高精度）
+                        const numSegments = Math.ceil(slideDistance / segmentLength);
                         
-                        for (const obj of collisionObjects) {
-                            // 只檢測 Mesh 物件，排除邊框線（LineSegments）
-                            const intersects = this.raycaster.intersectObject(obj, true);
-                            for (const intersection of intersects) {
-                                // 過濾掉邊框線：檢查物件類型，只保留 Mesh
-                                const object = intersection.object;
-                                // 跳過 LineSegments（邊框線）和 Line（線條）
-                                if (object.isLineSegments || object.isLine) {
-                                    continue;
+                        // 檢測多個高度點（滑鏟時蹲下，需要檢測更低的位置）
+                        const checkHeights = [];
+                        for (let i = 0; i <= 10; i++) {
+                            checkHeights.push(-i * 0.3);
+                        }
+                        
+                        // 分段檢測整個滑鏟路徑
+                        for (let segment = 0; segment < numSegments; segment++) {
+                            const segmentStart = segment * segmentLength;
+                            const segmentEnd = Math.min((segment + 1) * segmentLength, slideDistance);
+                            const segmentCheckDistance = segmentEnd - segmentStart;
+                            
+                            // 從當前位置加上已通過的路徑長度開始檢測
+                            const checkOrigin = camera.position.clone();
+                            checkOrigin.add(slideDir.clone().multiplyScalar(segmentStart));
+                            
+                            // 在每個高度點進行檢測
+                            for (const heightOffset of checkHeights) {
+                                const origin = checkOrigin.clone();
+                                origin.y += heightOffset;
+                                
+                                this.raycaster.set(origin, slideDir);
+                                const maxDistance = segmentCheckDistance + this.collisionRadius;
+                                
+                                for (const obj of collisionObjects) {
+                                    const intersects = this.raycaster.intersectObject(obj, true);
+                                    for (const intersection of intersects) {
+                                        const object = intersection.object;
+                                        if (object.isLineSegments || object.isLine) continue;
+                                        
+                                        if (object.isMesh && intersection.distance <= maxDistance) {
+                                            const hitPoint = intersection.point;
+                                            const hitNormal = intersection.face ? intersection.face.normal : null;
+                                            
+                                            let isValidCollision = false;
+                                            
+                                            if (hitNormal) {
+                                                const normalMatrix = new THREE.Matrix3().getNormalMatrix(object.matrixWorld);
+                                                const worldNormal = hitNormal.clone().applyMatrix3(normalMatrix).normalize();
+                                                const verticalDot = Math.abs(worldNormal.dot(new THREE.Vector3(0, 1, 0)));
+                                                
+                                                const isSlope = verticalDot > 0.707;
+                                                const isWall = verticalDot < 0.5;
+                                                
+                                                if (isWall) {
+                                                    const heightDiff = Math.abs(hitPoint.y - origin.y);
+                                                    if (heightDiff < 8) {
+                                                        isValidCollision = true;
+                                                    }
+                                                } else if (isSlope) {
+                                                    const heightDiff = hitPoint.y - origin.y;
+                                                    if (heightDiff >= -6 && heightDiff <= 3) {
+                                                        isValidCollision = true;
+                                                    }
+                                                } else {
+                                                    const heightDiff = Math.abs(hitPoint.y - origin.y);
+                                                    if (heightDiff < 8) {
+                                                        isValidCollision = true;
+                                                    }
+                                                }
+                                            } else {
+                                                const heightDiff = Math.abs(hitPoint.y - origin.y);
+                                                if (heightDiff < 8) {
+                                                    isValidCollision = true;
+                                                }
+                                            }
+                                            
+                                            if (isValidCollision) {
+                                                // 計算從起點到碰撞點的總距離
+                                                const totalDistance = segmentStart + intersection.distance;
+                                                if (totalDistance < minHitDistance) {
+                                                    hit = intersection;
+                                                    minHitDistance = totalDistance;
+                                                    
+                                                    // 如果碰撞距離太近，立即停止滑鏟
+                                                    if (totalDistance < this.collisionRadius) {
+                                                        safeMove.set(0, 0, 0);
+                                                        this.isSliding = false;
+                                                        this.slideTimer = 0;
+                                                        if (!this.keys.shift) {
+                                                            this.isCrouching = false;
+                                                        }
+                                                        move.set(0, 0, 0);
+                                                        camera.position.add(move);
+                                                        return; // 立即返回，不繼續移動
+                                                    } else {
+                                                        // 調整移動距離，停在碰撞點前
+                                                        const safeDistance = Math.max(0, totalDistance - this.collisionRadius);
+                                                        safeMove = slideDir.clone().multiplyScalar(safeDistance);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                                // 只檢測 Mesh 物件，並且檢查交點是否在合理的高度範圍內
-                                if (object.isMesh && intersection.distance <= maxDistance) {
-                                    // 檢查交點的高度是否在檢測範圍內
-                                    const hitPoint = intersection.point;
-                                    const heightDiff = Math.abs(hitPoint.y - origin.y);
-                                    // 只考慮高度差在合理範圍內的碰撞（擴大範圍以涵蓋跳躍時的高度）
-                                    if (heightDiff < 8 && intersection.distance < minHitDistance) {
-                                        hit = intersection;
-                                        minHitDistance = intersection.distance;
+                                
+                                // 如果已經找到碰撞且距離很近，提前退出
+                                if (hit && minHitDistance < this.collisionRadius) {
+                                    break;
+                                }
+                            }
+                            
+                            // 如果已經找到碰撞且距離很近，提前退出分段檢測
+                            if (hit && minHitDistance < this.collisionRadius) {
+                                break;
+                            }
+                        }
+                        
+                        // 如果檢測到碰撞，使用調整後的移動距離
+                        if (hit) {
+                            move.copy(safeMove);
+                        }
+                    } else {
+                        // 正常移動時的碰撞檢測（原有邏輯）
+                        const dir = horizontalMove.clone().normalize();
+                        
+                        const checkHeights = [];
+                        for (let i = 0; i <= 6; i++) {
+                            checkHeights.push(-i * 0.5);
+                        }
+                        
+                        for (const heightOffset of checkHeights) {
+                            const origin = camera.position.clone();
+                            origin.y += heightOffset;
+
+                            this.raycaster.set(origin, dir);
+                            const maxDistance = Math.min(distance + this.collisionRadius, this.maxStepDistance);
+                        
+                            for (const obj of collisionObjects) {
+                                const intersects = this.raycaster.intersectObject(obj, true);
+                                for (const intersection of intersects) {
+                                    const object = intersection.object;
+                                    if (object.isLineSegments || object.isLine) continue;
+                                    
+                                    if (object.isMesh && intersection.distance <= maxDistance) {
+                                        const hitPoint = intersection.point;
+                                        const hitNormal = intersection.face ? intersection.face.normal : null;
+                                        
+                                        let isValidCollision = false;
+                                        
+                                        if (hitNormal) {
+                                            const normalMatrix = new THREE.Matrix3().getNormalMatrix(object.matrixWorld);
+                                            const worldNormal = hitNormal.clone().applyMatrix3(normalMatrix).normalize();
+                                            const verticalDot = Math.abs(worldNormal.dot(new THREE.Vector3(0, 1, 0)));
+                                            
+                                            const isSlope = verticalDot > 0.707;
+                                            const isWall = verticalDot < 0.5;
+                                            
+                                            if (isWall) {
+                                                const heightDiff = Math.abs(hitPoint.y - origin.y);
+                                                if (heightDiff < 8) isValidCollision = true;
+                                            } else if (isSlope) {
+                                                const heightDiff = hitPoint.y - origin.y;
+                                                if (heightDiff >= -6 && heightDiff <= 3) isValidCollision = true;
+                                            } else {
+                                                const heightDiff = Math.abs(hitPoint.y - origin.y);
+                                                if (heightDiff < 8) isValidCollision = true;
+                                            }
+                                        } else {
+                                            const heightDiff = Math.abs(hitPoint.y - origin.y);
+                                            if (heightDiff < 8) isValidCollision = true;
+                                        }
+                                        
+                                        if (isValidCollision && intersection.distance < minHitDistance) {
+                                            hit = intersection;
+                                            minHitDistance = intersection.distance;
+                                        }
                                     }
                                 }
                             }
@@ -469,15 +607,40 @@ class StreetViewController {
                                 }
                             } else {
                                 // 主要是前進/後退，如果會撞牆就阻止
+                                // 滑鏟時如果撞牆，立即停止滑鏟
+                                if (this.isSliding) {
+                                    this.isSliding = false;
+                                    this.slideTimer = 0;
+                                    if (!this.keys.shift) {
+                                        this.isCrouching = false;
+                                    }
+                                }
                                 move.set(0, 0, 0);
                             }
-                        } else if (hitDistance < distance + this.collisionRadius) {
+                        } else {
                             // 會撞到牆但還有空間，調整移動距離
-                            const safeDistance = Math.max(0, hitDistance - this.collisionRadius);
-                            if (safeDistance > 0.1) {
-                                move.normalize().multiplyScalar(safeDistance);
-                            } else {
-                                move.set(0, 0, 0);
+                            const actualDistance = this.isSliding ? move.length() : distance;
+                            if (hitDistance < actualDistance + this.collisionRadius) {
+                                const safeDistance = Math.max(0, hitDistance - this.collisionRadius);
+                                if (safeDistance > 0.1) {
+                                    if (this.isSliding) {
+                                        // 滑鏟時按比例縮短移動距離
+                                        const ratio = safeDistance / actualDistance;
+                                        move.multiplyScalar(ratio);
+                                    } else {
+                                        move.normalize().multiplyScalar(safeDistance);
+                                    }
+                                } else {
+                                    // 滑鏟時如果空間太小，停止滑鏟
+                                    if (this.isSliding) {
+                                        this.isSliding = false;
+                                        this.slideTimer = 0;
+                                        if (!this.keys.shift) {
+                                            this.isCrouching = false;
+                                        }
+                                    }
+                                    move.set(0, 0, 0);
+                                }
                             }
                         }
                     }
