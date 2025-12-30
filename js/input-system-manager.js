@@ -399,8 +399,9 @@ class TinkercadMobileInput {
                 const distanceChangePercent = Math.abs(distanceChange / this.touchState.initialDistance);
                 
                 if (distanceChangePercent > 0.05) {
-                    // 縮放
-                    const zoomDelta = -distanceChange * this.map3D.zoomSpeed * 0.1;
+                    // 縮放：兩指距離增加時放大（拉近），距離減少時縮小（拉遠）
+                    // 增加速度係數（從 0.1 改為 0.5），並修正方向（移除負號）
+                    const zoomDelta = distanceChange * this.map3D.zoomSpeed * 0.5;
                     this.map3D.applyZoom(zoomDelta);
                     this.touchState.initialDistance = currentDistance;
                 } else {

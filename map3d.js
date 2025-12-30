@@ -1253,7 +1253,8 @@ class Map3D {
                 // 如果距離變化超過5%，視為縮放操作
                 if (distanceChangePercent > 0.05) {
                     // 縮放：雙指距離改變（中鍵縮放）
-                    const zoomDelta = -distanceChange * this.zoomSpeed * 0.1;
+                    // 增加速度係數（從 0.1 改為 0.5），並修正方向（移除負號）
+                    const zoomDelta = distanceChange * this.zoomSpeed * 0.5;
                     this.applyZoom(zoomDelta);
                     touchState.initialDistance = currentDistance;
                 } else {
