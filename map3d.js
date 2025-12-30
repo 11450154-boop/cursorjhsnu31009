@@ -23,9 +23,20 @@ class Map3D {
         this.mouseLockButton = null;
         
         this.init();
-        this.setupEventListeners();
+        // 使用智能輸入系統管理器（自動檢測設備和瀏覽器）
+        this.inputSystemManager = null;
+        // 延遲初始化輸入系統，等待 Three.js 完全載入
+        setTimeout(() => {
+            if (typeof InputSystemManager !== 'undefined') {
+                this.inputSystemManager = new InputSystemManager(this);
+                window.inputSystemManager = this.inputSystemManager; // 設置為全域變數
+            } else {
+                console.warn('InputSystemManager 未載入，使用舊版輸入系統');
+                this.setupEventListeners();
+                this.setupTouchControls();
+            }
+        }, 100);
         this.setupMouseLock();
-        this.setupTouchControls();
         this.loadModel();
     }
 

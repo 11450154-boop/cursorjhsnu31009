@@ -78,6 +78,14 @@ window.addEventListener('map3DReady', () => {
 
 // 如果事件已經觸發，直接設置
 document.addEventListener('DOMContentLoaded', () => {
+    // 初始化 UI 顯示系統管理器（自動檢測設備並應用 UI）
+    if (typeof UIDisplayManager !== 'undefined') {
+        window.uiDisplayManager = new UIDisplayManager();
+        console.log('[UI] UI 顯示系統管理器已初始化');
+    } else {
+        console.warn('[UI] UIDisplayManager 未載入，使用預設 UI');
+    }
+    
     // 先嘗試設置（如果 map3D 已經初始化）
     if (window.map3D) {
         setupMapUI();
